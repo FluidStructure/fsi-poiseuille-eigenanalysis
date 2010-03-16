@@ -1,0 +1,13 @@
+# GENERAL POSTPROCESSING PARAMETERS
+0                           # Mode number to plot
+'results'                   # Path to results directory
+True                        # Normalises spatial growth (to see absolute growth/decay)
+True                        # Useful for visualisation
+0.5                         # Plot contours from +/-maxFactor*max(abs(V))
+
+# MOVIE PARAMETERS
+5                           # Number of time periods to plot movie over
+20                          # Number of time steps per period
+False                       # Do not include endtime if movie is going to loop
+10                          # Number of frames per second
+'msmpeg4v2:vbitrate=800'    # Video codec to use
