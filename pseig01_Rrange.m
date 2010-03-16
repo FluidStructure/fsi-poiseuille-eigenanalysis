@@ -1,3 +1,5 @@
+THis is a change
+
 Rrange = linspace(5000,5000,1)
 
 % Set up the variables and influence coefficients for a nominal case
