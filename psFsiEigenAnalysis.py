@@ -510,25 +510,29 @@ class naiveMethod():
             avmat[s,s] = 0.5
             avmat[s,s+1] = 0.5
 
-
         if p.deterministicBCs == True:
             print 'Using Deterministic No Slip Boundary Conditions'
             
             dy = g.dy[1:p.chebN-1]
-            Nf = p.Nf - 2*p.Nx
+            #Nf = p.Nf - 2*p.Nx
+            #Ny = p.chebN - 2
+            #ycF = g.ycF[1:p.chebN-1]
             
             # Extract flow-wall influence coefficients for nearest elements
             t = [i*p.chebN for i in xrange(p.Nx)] + [(i+1)*p.chebN-1 for i in xrange(p.Nx)]
             INfwWallVorts = self.ICs['INfw'][:,t]
             ITfwWallVorts = self.ICs['ITfw'][:,t]
-            # Delete columns from fluid-wall influence matrices
-            INfw = delete(self.ICs['INfw'],t,axis=1)
-            ITfw = delete(self.ICs['ITfw'],t,axis=1)
             
             # Solve for the wall source strengths and nearest-to-wall flow elements together
             Iww = concatenate((concatenate((self.ICs['INww'],INfwWallVorts),axis=1),concatenate((self.ICs['ITww'],ITfwWallVorts),axis=1)),axis=0)
-            R = -1.0*concatenate((INfw,ITfw),axis=0)
+            
+            # Create Right-hand-side for fluid elements 
+            R = -1.0*concatenate((self.ICs['INfw'],self.ICs['ITfw']),axis=0)
             R = columnwiseMultiply(R,dy)
+            # Set nearest-to-wall elements to zero - these are being calculated exactly to enforce the no-slip condition
+            for col in t:
+                R[:,col] = R[:,col]*0.0
+            
             # Add compliant panel accelerations and velocities
             WallVels = zeros((p.Nx*2,Nn))
             WallVels[p.Nx+p.Nup:p.Nx+p.Nup+p.Nco,:] = avmat
@@ -540,16 +544,14 @@ class naiveMethod():
             MA = Mws[0:2*p.Nx,:]
             MAf = Mws[2*p.Nx:4*p.Nx,:]
             
-            # Matrix "B" - gives the vertical perterbation velocity "vp" when multiplied with the vector of
-            # flow element strengths and wall velocities
-            INff = delete(self.ICs['INff'],t,axis=0)
-            INff = delete(INff,t,axis=1)
-            MB = columnwiseMultiply(INff,dy)
-            MB = concatenate((MB,zeros((Nf,Nn)),zeros((Nf,Nn))),axis=1)
-            INwf = delete(self.ICs['INwf'],t,axis=0)
-            MB = MB + dot(INwf,MA)
-            
+            ## Remove nearest-to-wall flow elements from other influence matrices
+            #self.ICs['INff'] = delete(self.ICs['INff'],t,axis=0)
+            #self.ICs['INff'] = delete(self.ICs['INff'],t,axis=1)
+            #self.ICs['INwf'] = delete(self.ICs['INwf'],t,axis=0)
+           
         else:
+            print 'Using Vorticity Injection Method to enforce BCs'
+            
             # Matrix "A" - the coefficient that gives wall element strengths when
             # pre-multiplied with the vector of flow element strengths and wall
             # velocities
@@ -565,83 +567,109 @@ class naiveMethod():
             Tmp = Tmp[:,p.Nx+p.Nup:p.Nx+p.Nup+p.Nco]
             Tmp = dot(Tmp,avmat)
             MA = concatenate((MA,zeros((p.Nx*2,Nn)),Tmp),axis=1)
+            
+        # Get the number of vertical fluid elements
+        Ny = p.chebN
+        
+        # Matrix "B" - the coefficient that gives vertical velocity at the flow
+        # elements "vp" when pre-multiplied with the vector of flow element
+        # strengths and wall velocities
+        MB = columnwiseMultiply(self.ICs['INff'],g.dy)
+        MB = concatenate((MB,zeros((p.Nf,Nn)),zeros((p.Nf,Nn))),axis=1)
+        MB = MB + dot(self.ICs['INwf'],MA)
 
-            # Matrix "B" - the coefficient that gives vertical velocity at the flow
-            # elements "vp" when pre-multiplied with the vector of flow element
-            # strengths and wall velocities
-            MB = columnwiseMultiply(self.ICs['INff'],g.dy)
-            MB = concatenate((MB,zeros((p.Nf,Nn)),zeros((p.Nf,Nn))),axis=1)
-            MB = MB + dot(self.ICs['INwf'],MA)
+        # Matrix "C" - Right hand side of fluid transport equation
+        MC = f.d1dx(eye(p.Nf),len(g.dy),p.dx,order=1)
+        for i in xrange(p.Nf):
+            s = mod(i,Ny)
+            U = -1.0*(1 - (g.ycF[s]**2.0))
+            MC[i,:] = MC[i,:]*U
+        # Add zeros for the wall acceleration and velocity
+        MC = concatenate((MC,zeros((p.Nf,Nn)),zeros((p.Nf,Nn))),axis=1)
+        # Add the component due to y-direction mean-vorticity transport
+        MC = MC - MB*2.0
+        # Add diffusion terms
+        Tmp = f.d2dx(eye(p.Nf),len(g.dy),p.dx)              # Second derivative in the x-direction
+        # Second derivative in the y-direction
+        for i in xrange(p.Nx):
+            st = i*Ny
+            fin = (i+1)*Ny
+            Tmp[st:fin,st:fin] = Tmp[st:fin,st:fin] + g.d2dy
+        Tmp = p.nu*Tmp
+        Tmp = concatenate((Tmp,zeros((p.Nf,Nn)),zeros((p.Nf,Nn))),axis=1)
+        # Add diffusion to RHS
+        MC = MC + Tmp
 
-            # Matrix "C" - Right hand side of fluid transport equation
-            MC = f.d1dx(eye(p.Nf),len(g.dy),p.dx,order=1)
-            for i in xrange(p.Nf):
-                s = mod(i,p.chebN)
-                U = -1.0*(1 - (g.ycF[s]**2.0))
-                MC[i,:] = MC[i,:]*U
-            # Add zeros for the wall acceleration and velocity
-            MC = concatenate((MC,zeros((p.Nf,Nn)),zeros((p.Nf,Nn))),axis=1)
-            # Add the component due to y-direction mean-vorticity transport
-            MC = MC - MB*2.0
-            # Add diffusion terms
-            Tmp = f.d2dx(eye(p.Nf),len(g.dy),p.dx)  # Second derivative in the x-direction
-            # Second derivative in the y-direction
-            for i in xrange(p.Nx):
-                st = i*p.chebN
-                fin = (i+1)*p.chebN
-                Tmp[st:fin,st:fin] = Tmp[st:fin,st:fin] + g.d2dy
-            Tmp = p.nu*Tmp
-            Tmp = concatenate((Tmp,zeros((p.Nf,Nn)),zeros((p.Nf,Nn))),axis=1)
-            # Add diffusion to RHS
-            MC = MC + Tmp
-
+        # Matrix "D" - Left hand side of fluid transport equation
+        MD = concatenate((eye(p.Nf),zeros((p.Nf,Nn)),zeros((p.Nf,Nn))),axis=1)
+        if p.allowSlip == False and p.deterministicBCs == False:
             # Matrix "P" - the coefficient that gives tangential velocities at the wall
             # element surfaces.
             MP = columnwiseMultiply(self.ICs['ITfw'],g.dy)
             MP = concatenate((MP,zeros((p.Nx*2,Nn)),zeros((p.Nx*2,Nn))),axis=1)
             MP = MP + dot(self.ICs['ITww'],MA)
-
-            # Matrix "D" - Left hand side of fluid transport equation
-            MD = concatenate((eye(p.Nf),zeros((p.Nf,Nn)),zeros((p.Nf,Nn))),axis=1)
-            if p.allowSlip == False and p.deterministicBCs == False:
-                for i in xrange(p.Nx):
-                    t = i*p.chebN
-                    b = t + p.chebN - 1
-                    MD[t,:] = MD[t,:] - (MP[i,:]/g.dy[0])
-                    MD[b,:] = MD[b,:] + (MP[p.Nx+i,:]/g.dy[p.chebN-1])
             
-            # Matrix "E" - Left hand side of equation for "v1_dot = v2"
-            ME = concatenate((zeros((Nn,p.Nf)),eye(Nn),zeros((Nn,Nn))),axis=1)
-            
-            # Matrix "F" - Right hand side of equation for "v1_dot = v2"
-            MF = concatenate((zeros((Nn,p.Nf)),zeros((Nn,Nn)),eye(Nn)),axis=1)
+            for i in xrange(p.Nx):
+                print 'Injecting vorticity at Nx = ' + str(i)
+                t = i*p.chebN
+                b = t + p.chebN - 1
+                MD[t,:] = MD[t,:] - (MP[i,:]/g.dy[0])
+                MD[b,:] = MD[b,:] + (MP[p.Nx+i,:]/g.dy[p.chebN-1])
+        
+        else:
+            MP = columnwiseMultiply(self.ICs['ITfw'],[0.0])
+            MP = concatenate((MP,zeros((p.Nx*2,Nn)),zeros((p.Nx*2,Nn))),axis=1)
+        
+        # Matrix "E" - Left hand side of equation for "v1_dot = v2"
+        ME = concatenate((zeros((Nn,p.Nf)),eye(Nn),zeros((Nn,Nn))),axis=1)
+        
+        # Matrix "F" - Right hand side of equation for "v1_dot = v2"
+        MF = concatenate((zeros((Nn,p.Nf)),zeros((Nn,Nn)),eye(Nn)),axis=1)
 
-            # Matrix "G" - Left hand side of wall equation
-            # First the wall inertia terms
-            MG = concatenate((zeros((Nn,p.Nf)),zeros((Nn,Nn)),(p.rhow*p.hw)*eye(Nn)),axis=1)
-            # Add the pressure forcing terms
-            PF = p.dx*cumsum(MP[p.Nx+p.Nup:p.Nx+p.Nup+p.Nco-1,:],axis=0)
-            Ntot = p.Nf + Nn*2
-            MG = MG + concatenate((zeros((1,Ntot)),PF,zeros((1,Ntot))),axis=0)
+        # Matrix "G" - Left hand side of wall equation
+        # First the wall inertia terms
+        MG = concatenate((zeros((Nn,p.Nf)),zeros((Nn,Nn)),(p.rhow*p.hw)*eye(Nn)),axis=1)
+        # Add the pressure forcing terms
+        PF = p.dx*cumsum(MP[p.Nx+p.Nup:p.Nx+p.Nup+p.Nco-1,:],axis=0)
+        Ntot = p.Nf + Nn*2
+        MG = MG + concatenate((zeros((1,Ntot)),PF,zeros((1,Ntot))),axis=0)
 
-            # Matrix "H" - Right hand side of wall equation
-            MH = f.d4dx(eye(Nn),1,p.dx)
-            MH = concatenate((zeros((Nn,p.Nf)), -1.0*(p.B*MH + p.K*eye(Nn)), -1.0*p.d*eye(Nn)), axis=1)
+        # Matrix "H" - Right hand side of wall equation
+        MH = f.d4dx(eye(Nn),1,p.dx)
+        MH = concatenate((zeros((Nn,p.Nf)), -1.0*(p.B*MH + p.K*eye(Nn)), -1.0*p.d*eye(Nn)), axis=1)
 
-            # Construct the left and right hand matrices
-            self.LHS = concatenate((MD,ME,MG),axis=0)
-            self.RHS = concatenate((MC,MF,MH),axis=0)
+        # Construct the left and right hand matrices
+        self.LHS = concatenate((MD,ME,MG),axis=0)
+        self.RHS = concatenate((MC,MF,MH),axis=0)
 
-            # Remove the end-nodes (which don't move) from the set of equations
-            nn = [p.Nf, p.Nf+Nn-1, p.Nf+Nn, p.Nf+2*Nn]    # Rows/columns to delete
+        # Remove the end-nodes (which don't move) from the set of equations
+        nn = [p.Nf, p.Nf+Nn-1, p.Nf+Nn, p.Nf+2*Nn]    # Rows/columns to delete
+        for i in xrange(2):
+            self.LHS = delete(self.LHS,nn,axis=i)
+            self.RHS = delete(self.RHS,nn,axis=i)
+        MAf = delete(MAf,nn,axis=1)
+
+        if deterministicBCs == True:
+            # Substitute fluid elements that are calculated deterministically
+            for row in xrange(size(self.RHS,0)):
+                print 'Substituting deterministic BC at row = ' + str(row)
+                c = 0
+                for col in t:
+                    self.RHS[row,:] = self.RHS[row,:] + self.RHS[row,col]*MAf[c,:]
+                    c += 1
+            # Remove rows and columns that are calculated deterministically
             for i in xrange(2):
-                self.LHS = delete(self.LHS,nn,axis=i)
-                self.RHS = delete(self.RHS,nn,axis=i)
+                self.LHS = delete(self.LHS,t,axis=i)
+                self.RHS = delete(self.RHS,t,axis=i)
 
-            if p.fluidOnly == True:
-                # Get the LHS and RHS for the fluid only
-                self.LHS = self.LHS[0:p.Nf,0:p.Nf]
-                self.RHS = self.RHS[0:p.Nf,0:p.Nf]
+        if p.fluidOnly == True:
+            if deterministicBCs == True:
+                Nf = (p.chebN - 2)*p.Nx
+            else:
+                Nf = p.Nf
+            # Get the LHS and RHS for the fluid only
+            self.LHS = self.LHS[0:Nf,0:Nf]
+            self.RHS = self.RHS[0:Nf,0:Nf]
 
         print 'Done'
 
