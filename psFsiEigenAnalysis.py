@@ -579,7 +579,7 @@ class naiveMethod():
         MB = MB + dot(self.ICs['INwf'],MA)
 
         # Matrix "C" - Right hand side of fluid transport equation
-        MC = f.d1dx(eye(p.Nf),len(g.dy),p.dx,order=1)
+        MC = f.d1dx(eye(p.Nf),len(g.dy),p.dx,order=2)
         for i in xrange(p.Nf):
             s = mod(i,Ny)
             U = -1.0*(1 - (g.ycF[s]**2.0))
@@ -1149,11 +1149,12 @@ class ppOde45(postProc):
             plt.contourf(g.xc,yc,vmT)
             plt.axis('tight')
             plt.colorbar()
-            
+              
             if dumpFigs == True:
                 fn = '_tmp%03d.png'%f
                 print 'Saving frame', fn
                 fig1.savefig(fn)
+            fig1.clf()
             f += 1
         
         print 'Making movie animation.mpg - this make take a while'

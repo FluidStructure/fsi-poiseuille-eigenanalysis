@@ -57,7 +57,7 @@ if strcmp(solver,'eigs')
 elseif strcmp(solver,'ode45')
 
     % Time steps to dump out
-    TSPAN = linspace(0,20,200);
+    TSPAN = linspace(0,120,800);
     if deterministicBCs == 'True'
         Ny = chebN-2
     else
@@ -67,7 +67,7 @@ elseif strcmp(solver,'ode45')
     Y0 = zeros(N,1);
 
     nn = round(Nx/4)*Ny + round(Ny/2);
-    Y0(nn,1) = 1e-5;	% Initialise with a spot disturbance (not good)
+    Y0(nn,1) = 1e-2;	% Initialise with a spot disturbance (generally not good)
 
     %nny = round(Ny/2)
     %dx = LT/Nx;
@@ -76,7 +76,7 @@ elseif strcmp(solver,'ode45')
     %	Y0(((nn-1)*Ny)+nny) = 1 - cos(pcx(nn));		% Initialise with a sin-wave disturbance along centre-line
     %end
 
-    vopt = odeset ("OutputFcn", @odeSaveVars);
+    vopt = odeset("OutputFcn", @odeSaveVars);
     ode45 (@callPythonODE, TSPAN, Y0, vopt, A);
     %[TOUT,YOUT] = ode45(@callPythonODE,TSPAN,Y0);
     %save RESODE45.mat
