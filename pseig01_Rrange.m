@@ -1,7 +1,10 @@
 Rrange = linspace(5000,5000,1)
 
+# Source the file with all the octave functions
+source('octaveFunctions.m')
+
 % Set up the variables and influence coefficients for a nominal case
-pseig01_a
+setupMatrices
 
 for R = Rrange
     disp(['CALCULATING EIGENVALUES FOR R = ' num2str(R)])
@@ -13,8 +16,8 @@ for R = Rrange
     save -v7 VARS.mat
 
     % Recalculate the matrices
-    pseig01_b
+    evaluateMatrices
     % Recalculate the eigenvalues
-    pseig01_c
+    calculateEigenmodes
 end
 

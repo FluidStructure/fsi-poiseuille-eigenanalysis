@@ -1,0 +1,17 @@
+5000.0          # Reynolds number (based on displacement thickness of boundary layer) instability from Orr-Sommerfeld is at 5800 (corresponding wavenumber = 1.025)
+16              # Number of Chebyshev collocation points in the wall-normal direction
+90              # Number of collocation points (panels) in the x-direction (for the solid wall elements) on the first (upstream) part of the lower wall
+20              # Number of collocation points (panels) in the x-direction (for the compliant wall elements)
+90              # Number of collocation points (panels) in the x-direction (for the solid wall elements) on the second (downstream) part of the lower wall
+60.0            # Length of the channel section
+1000.0          # Density of the wall material
+0.005           # Thickness of the wall
+0.0             # Damping coefficient of the backing-damping (N/m)
+2.592e7         # Youngs modulus of the wall material
+0.0             # Stiffness of the backing springs
+True            # Calculate for the fluid only (assume rigid walls)
+False           # Allow slip at the boundary (prevent vorticity injection)
+False           # Deterministic boundary conditions
+Naive           # 'Naive' or 'FMM' - which solution methodology to use
+octave-3.2.2    # Octave version to use (for eigs and ode commands)
+ode45           # 'eigs' or 'ode45' - which solver to use

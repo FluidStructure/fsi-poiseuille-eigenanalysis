@@ -10,4 +10,4 @@ True                        # Useful for visualisation
 20                          # Number of time steps per period
 False                       # Do not include endtime if movie is going to loop
 10                          # Number of frames per second
-'msmpeg4v2:vbitrate=800'    # Video codec to use
+msmpeg4v2:vbitrate=800      # Video codec to use
