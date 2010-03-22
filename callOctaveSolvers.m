@@ -58,7 +58,11 @@ elseif strcmp(solver,'ode45')
 
     % Time steps to dump out
     TSPAN = linspace(0,20,200);
-    Ny = chebN;
+    if deterministicBCs == 'True'
+        Ny = chebN-2
+    else
+        Ny = chebN;
+    end
     N = Ny*Nx;
     Y0 = zeros(N,1);
 

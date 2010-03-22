@@ -11,7 +11,7 @@
 0.0             # Stiffness of the backing springs
 True            # Calculate for the fluid only (assume rigid walls)
 False           # Allow slip at the boundary (prevent vorticity injection)
-False           # Deterministic boundary conditions
+True            # Deterministic boundary conditions
 Naive           # 'Naive' or 'FMM' - which solution methodology to use
 octave-3.2.2    # Octave version to use (for eigs and ode commands)
 ode45           # 'eigs' or 'ode45' - which solver to use

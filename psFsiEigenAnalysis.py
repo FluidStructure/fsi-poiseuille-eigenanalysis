@@ -649,21 +649,20 @@ class naiveMethod():
             self.RHS = delete(self.RHS,nn,axis=i)
         MAf = delete(MAf,nn,axis=1)
 
-        if deterministicBCs == True:
+        if p.deterministicBCs == True:
             # Substitute fluid elements that are calculated deterministically
-            for row in xrange(size(self.RHS,0)):
-                print 'Substituting deterministic BC at row = ' + str(row)
-                c = 0
-                for col in t:
-                    self.RHS[row,:] = self.RHS[row,:] + self.RHS[row,col]*MAf[c,:]
-                    c += 1
+            # Firstly: extract deterministically-calculated fluid elements
+            A = self.RHS[:,t]
             # Remove rows and columns that are calculated deterministically
             for i in xrange(2):
                 self.LHS = delete(self.LHS,t,axis=i)
                 self.RHS = delete(self.RHS,t,axis=i)
+            MAf = delete(MAf,t,axis=1)
+            A = delete(A,t,axis=0)
+            self.RHS = self.RHS + dot(A,MAf)
 
         if p.fluidOnly == True:
-            if deterministicBCs == True:
+            if p.deterministicBCs == True:
                 Nf = (p.chebN - 2)*p.Nx
             else:
                 Nf = p.Nf
@@ -1129,6 +1128,11 @@ class ppOde45(postProc):
         vars = loadmat('VARS.mat',struct_as_record=True)
 
         Ny = int(vars['chebN'])
+        yc = g.yc
+        if 'True' in vars['deterministicBCs']:
+            yc = g.yc[1:Ny-1]
+            Ny = int(vars['chebN']) - 2
+            
         Nx = int(vars['Nx'])
         if 'True' in str(vars['fluidOnly']):
             Ncw = 0
@@ -1142,8 +1146,9 @@ class ppOde45(postProc):
             inDict = loadmat(fpath,struct_as_record=True)
             vmT = reshape(inDict['y'],(Ny,Nx),order='F')
             
-            plt.contourf(g.xc,g.yc,vmT)
+            plt.contourf(g.xc,yc,vmT)
             plt.axis('tight')
+            plt.colorbar()
             
             if dumpFigs == True:
                 fn = '_tmp%03d.png'%f
