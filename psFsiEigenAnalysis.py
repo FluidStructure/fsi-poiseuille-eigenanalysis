@@ -582,7 +582,7 @@ class naiveMethod():
         # Add zeros for the wall acceleration and velocity
         MC = concatenate((MC,zeros((p.Nf,Nn)),zeros((p.Nf,Nn))),axis=1)
         # Add the component due to y-direction mean-vorticity transport
-        MC = MC - MB*2.0
+        MC = MC + MB*2.0
         # Add diffusion terms
         Tmp = f.d2dx(eye(p.Nf),len(g.dy),p.dx)              # Second derivative in the x-direction
         # Second derivative in the y-direction

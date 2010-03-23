@@ -17,6 +17,7 @@ if strcmp(solver,'eigs')
     nummods = 8;
     opts.maxit = 20000;
     opts.disp = 1;
+    opts.p = nummods*4;
     %opts.tol = eps*1e-3;
     % Set point sigma: NOTE If: Period = lamda/Uinf => Freq = Uinf/lamda => Omega = 2*pi*Freq;
     sigst = 'LR';
@@ -57,7 +58,7 @@ if strcmp(solver,'eigs')
 elseif strcmp(solver,'ode45')
 
     % Time steps to dump out
-    TSPAN = [0 20];
+    TSPAN = [0 120];
 
 
     if deterministicBCs == 'True'
@@ -78,7 +79,7 @@ elseif strcmp(solver,'ode45')
     %	Y0(((nn-1)*Ny)+nny) = 1 - cos(pcx(nn));		% Initialise with a sin-wave disturbance along centre-line
     %end
 
-    vopt = odeset("RelTol", 1e-3, "AbsTol", 1e-3, "NormControl", "on", "MaxStep", 1e-2, "OutputFcn", @odeSaveVars);
+    vopt = odeset("RelTol", 1e-3, "AbsTol", 1e-3, "NormControl", "on", "MaxStep", 5e-2, "OutputFcn", @odeSaveVars);
     ode45 (@callPythonODE, TSPAN, Y0, vopt, A);
     %[TOUT,YOUT] = ode45(@callPythonODE,TSPAN,Y0);
     %save RESODE45.mat
