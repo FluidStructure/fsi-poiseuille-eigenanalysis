@@ -57,9 +57,11 @@ if strcmp(solver,'eigs')
 elseif strcmp(solver,'ode45')
 
     % Time steps to dump out
-    TSPAN = linspace(0,20,200);
+    TSPAN = [0 20];
+
+
     if deterministicBCs == 'True'
-        Ny = chebN-2
+        Ny = chebN-2;
     else
         Ny = chebN;
     end
@@ -76,7 +78,7 @@ elseif strcmp(solver,'ode45')
     %	Y0(((nn-1)*Ny)+nny) = 1 - cos(pcx(nn));		% Initialise with a sin-wave disturbance along centre-line
     %end
 
-    vopt = odeset("OutputFcn", @odeSaveVars);
+    vopt = odeset("RelTol", 1e-3, "AbsTol", 1e-3, "NormControl", "on", "MaxStep", 1e-2, "OutputFcn", @odeSaveVars);
     ode45 (@callPythonODE, TSPAN, Y0, vopt, A);
     %[TOUT,YOUT] = ode45(@callPythonODE,TSPAN,Y0);
     %save RESODE45.mat
@@ -131,8 +133,18 @@ function [x] = callPythonEIG(v,sigma)
 endfunction
 
 
+function [] = writeMatFile(c,t,y)
+    fwnam = mvarname('results','TStep',c);
+    fwnam = strcat([fwnam '.mat']);
+    disp(['Saving result... to: '  fwnam])
+    save('-v7',fwnam,'t','y')
+endfunction
+
 
 function [varargout] = odeSaveVars (vt, vy, vflag, varargin)
+
+    % Timestep size for output (seconds)
+    dtOUT = 0.25;
 
     %# No input argument check is done for a higher processing speed
     %persistent vfigure;
@@ -143,28 +155,21 @@ function [varargout] = odeSaveVars (vt, vy, vflag, varargin)
     if (strcmp (vflag, 'init')) 
         %# Nothing to return, vt is either the time slot [tstart tstop]
         %# or [t0, t1, ..., tn], vy is the inital value vector 'vinit'
-        %vfigure = figure;
-        %vtold = vt(1,1); vyold = vy(:,1); 
-        vcounter = 0;
-
         t = vt(1,1);y = vy(:,1);
-        fwnam = mvarname('results','TStep',vcounter);
-        fwnam = strcat([fwnam '.mat']);
-        disp(['Saving result... to: '  fwnam])
-        save('-v7',fwnam,'t','y')
+        vcounter = floor(t/dtOUT);
+        disp(['vflag == empty, t = ' num2str(t) ', c = ' num2str(vcounter)])
+        writeMatFile(vcounter,t,y)
 
     elseif (isempty (vflag))
         %# Return something in varargout{1}, either false for 'not stopping
         %# the integration' or true for 'stopping the integration'
-        vcounter = vcounter + 1; 
-        %figure (vfigure);
-        %vtold(vcounter,1) = vt(1,1);vyold(:,vcounter) = vy(:,1);
-
         t = vt(1,1);y = vy(:,1);
-        fwnam = mvarname('results','TStep',vcounter);
-        fwnam = strcat([fwnam '.mat']);
-        disp(['Saving result... to: '  fwnam])  
-        save('-v7',fwnam,'t','y')
+        s = floor(t/dtOUT);
+        if s ~= vcounter
+            vcounter = s; 
+            disp(['vflag == empty, t = ' num2str(t) ', c = ' num2str(vcounter)])
+            writeMatFile(vcounter,t,y)
+        end
 
         %plot (vtold, vyold, '-o', 'markersize', 1); drawnow;
         varargout{1} = false;
