@@ -1159,7 +1159,7 @@ class ppOde45(postProc):
         
         print 'Making movie animation.mpg - this make take a while'
         os.system("mencoder 'mf://_tmp*.png' -mf type=png:fps=" + str(int(p.fps)) + " -ovc lavc -lavcopts vcodec=" + p.vcodec + " -nosound -o ode45.avi")
-        os.system("rm -v *.png")
+        #os.system("rm -v *.png")
 
 class ppEigs(postProc):
 
@@ -1176,7 +1176,7 @@ class ppEigs(postProc):
             self.plotTimes(fname,p.Np,p.P,dumpFigs=True)
         print 'Making movie animation.mpg - this make take a while'
         os.system("mencoder 'mf://_tmp*.png' -mf type=png:fps=" + str(int(self.p.movie.fps)) + " -ovc lavc -lavcopts vcodec=" + self.p.movie.vcodec + " -nosound -o eigs.avi")
-        os.system("rm -v *.png")
+        #os.system("rm -v *.png")
 
     def plotTimes(self,fname,Np,P,dumpFigs=False):
 
