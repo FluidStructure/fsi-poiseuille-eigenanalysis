@@ -57,7 +57,7 @@ if strcmp(solver,'eigs')
 elseif strcmp(solver,'ode45')
 
     % Time steps to dump out
-    TSPAN = linspace(0,120,800);
+    TSPAN = linspace(0,20,200);
     if deterministicBCs == 'True'
         Ny = chebN-2
     else

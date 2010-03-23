@@ -520,8 +520,8 @@ class naiveMethod():
             
             # Extract flow-wall influence coefficients for nearest elements
             t = [i*p.chebN for i in xrange(p.Nx)] + [(i+1)*p.chebN-1 for i in xrange(p.Nx)]
-            INfwWallVorts = self.ICs['INfw'][:,t]
-            ITfwWallVorts = self.ICs['ITfw'][:,t]
+            INfwWallVorts = self.ICs['INfw'][:,t]*g.dy[0]
+            ITfwWallVorts = self.ICs['ITfw'][:,t]*g.dy[0]
             
             # Solve for the wall source strengths and nearest-to-wall flow elements together
             Iww = concatenate((concatenate((self.ICs['INww'],INfwWallVorts),axis=1),concatenate((self.ICs['ITww'],ITfwWallVorts),axis=1)),axis=0)
