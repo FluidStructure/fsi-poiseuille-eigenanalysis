@@ -528,7 +528,7 @@ class naiveMethod():
             
             # Create Right-hand-side for fluid elements 
             R = -1.0*concatenate((self.ICs['INfw'],self.ICs['ITfw']),axis=0)
-            R = columnwiseMultiply(R,dy)
+            R = columnwiseMultiply(R,g.dy)
             # Set nearest-to-wall elements to zero - these are being calculated exactly to enforce the no-slip condition
             for col in t:
                 R[:,col] = R[:,col]*0.0
@@ -544,11 +544,6 @@ class naiveMethod():
             MA = Mws[0:2*p.Nx,:]
             MAf = Mws[2*p.Nx:4*p.Nx,:]
             
-            ## Remove nearest-to-wall flow elements from other influence matrices
-            #self.ICs['INff'] = delete(self.ICs['INff'],t,axis=0)
-            #self.ICs['INff'] = delete(self.ICs['INff'],t,axis=1)
-            #self.ICs['INwf'] = delete(self.ICs['INwf'],t,axis=0)
-           
         else:
             print 'Using Vorticity Injection Method to enforce BCs'
             
