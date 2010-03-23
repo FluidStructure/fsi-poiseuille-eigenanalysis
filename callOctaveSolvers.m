@@ -78,11 +78,7 @@ elseif strcmp(solver,'ode45')
     %	Y0(((nn-1)*Ny)+nny) = 1 - cos(pcx(nn));		% Initialise with a sin-wave disturbance along centre-line
     %end
 
-<<<<<<< HEAD:callOctaveSolvers.m
-    vopt = odeset("RelTol", 1e-3, "AbsTol", 1e-3, "NormControl", "on", "MaxStep", 1e-3, "OutputFcn", @odeSaveVars);
-=======
     vopt = odeset("RelTol", 1e-3, "AbsTol", 1e-3, "NormControl", "on", "MaxStep", 1e-2, "OutputFcn", @odeSaveVars);
->>>>>>> fedf293f1a9c8aa526883b644462347a9246e17c:callOctaveSolvers.m
     ode45 (@callPythonODE, TSPAN, Y0, vopt, A);
     %[TOUT,YOUT] = ode45(@callPythonODE,TSPAN,Y0);
     %save RESODE45.mat
