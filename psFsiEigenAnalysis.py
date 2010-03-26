@@ -1118,6 +1118,7 @@ class ppOde45(postProc):
     def makeMovie(self,dumpFigs=True):
         p = self.p.movie()
         g = self.g
+        pg = self.p.general()
         fig1 = plt.figure()
         fig1.set_figwidth(16);fig1.set_figheight(4)
         vars = loadmat('VARS.mat',struct_as_record=True)
@@ -1136,12 +1137,20 @@ class ppOde45(postProc):
         
         fnames = self.getFilesByPrefix('TStep')
         f = 0
+        Z = []
         for fname in fnames:
             fpath = 'results/'+fname
             inDict = loadmat(fpath,struct_as_record=True)
             vmT = reshape(inDict['y'],(Ny,Nx),order='F')
             
-            plt.contourf(g.xc,yc,vmT)
+            m = np.max(real(vmT))
+            m = m*pg.maxFactor;
+            if Z == []: 
+                Z = np.linspace(-1.0*m,m,20)
+            elif m > 2*np.max(Z) or m < 0.5*np.max(Z):
+                Z = np.linspace(-1.0*m,m,20)
+
+            plt.contourf(g.xc,yc,vmT,Z)
             plt.axis('tight')
             plt.colorbar()
               
@@ -1164,20 +1173,29 @@ class ppEigs(postProc):
             self.plotTimes(fname,1,1)
         show()
     
-    def makeMovie(self):
-        p = self.p.movie()
+    def makeMovie(self,fnames=['evals_R5000.mat']):
         #for fname in os.listdir(resultsDir):
-        for fname in ['evals_R5000.mat']:
-            self.plotTimes(fname,p.Np,p.P,dumpFigs=True)
-        print 'Making movie animation.mpg - this make take a while'
-        os.system("mencoder 'mf://_tmp*.png' -mf type=png:fps=" + str(int(self.p.movie.fps)) + " -ovc lavc -lavcopts vcodec=" + self.p.movie.vcodec + " -nosound -o eigs.avi")
+        for fname in fnames:
+            self.plotTimes(fname)
+            print 'Making movie animation.mpg - this make take a while'
+            os.system("mencoder 'mf://_tmp*.png' -mf type=png:fps=" + str(int(pm.fps)) + " -ovc lavc -lavcopts vcodec=" + pm.vcodec + " -nosound -o " + fname + ".avi")
         #os.system("rm -v *.png")
 
-    def plotTimes(self,fname,Np,P,dumpFigs=False):
+    def plotTimes(self,fname,dumpFigs=True):
+        
+        pg = self.p.general()
+        pm = self.p.movie()
+        ps = parameters.simulation()
+
+        Np = pm.Np
+        P = pm.P
 
         vdict = loadmat('VARS.mat',struct_as_record=True)
-        x = [vdict['pcx'][0][i] for i in xrange(len(vdict['pcx'][0]))]
-        y = [vdict['pcy'][i][0] for i in xrange(len(vdict['pcy']))]
+        x = self.g.xc
+        if ps.deterministicBCs == True:
+            y = self.g.yc[1:len(self.g.yc)-1]
+        else:
+            y = self.g.yc
         x = array(x)
         y = array(y)
         L = float(vdict['LT'][0][0])
@@ -1187,19 +1205,19 @@ class ppEigs(postProc):
         ax = fig.add_subplot(111)
 
         print fname
-        indict = loadmat(resultsDir + '/' + fname,struct_as_record=True)
-        v = [indict['Veigs'][i][modeNum] for i in xrange(len(indict['Veigs']))]
-        e = indict['evals'][modeNum][0]
-        if ignoreTemporalGrowth == True:
+        indict = loadmat(pg.resultsDir + '/' + fname,struct_as_record=True)
+        v = [indict['Veigs'][i][pg.modeNum] for i in xrange(len(indict['Veigs']))]
+        e = indict['evals'][pg.modeNum][0]
+        if pg.ignoreTemporalGrowth == True:
             E = complex(0,imag(e))
         else:
             E = e
-        print 'Eigenvalue = ' + str(e)
+        print 'Eigenvalue = ' + str(E)
 
         vm = reshape(v,(len(y),len(x)),order='F')
 
         T = abs(2*pi/imag(e))
-        tRange = linspace(0,T*P,Np*P,endpoint=includeEndTime)
+        tRange = linspace(0,T*P,Np*P,endpoint=pm.includeEndTime)
         f = 0
         Z = []
         for t in tRange:
@@ -1208,13 +1226,16 @@ class ppEigs(postProc):
             timeComponent = exp(E*t)
             vmT = vm*timeComponent
             vmT = real(vmT)
-            if normalizeSpatialGrowth == True:
-                relativeSpatialGrowth = exp(real(e)*x)
+            if pg.normalizeSpatialGrowth == True:
+                relativeSpatialGrowth = zeros((len(y),len(x)))
+                for i in xrange(len(y)):
+                    U = 1 - (y[i]**2)
+                    relativeSpatialGrowth[i,:] = exp(real(e)*(x/U))
                 vmT = multiply(vmT,relativeSpatialGrowth)
 
             if Z == []:
                 m = np.max(real(vmT))
-                m = m*maxFactor;
+                m = m*pg.maxFactor;
                 Z = np.linspace(-1.0*m,m,20)
 
             plt.contourf(x,y,vmT,Z)

@@ -14,10 +14,10 @@ end
 if strcmp(solver,'eigs')
 
     % Set some parameters
-    nummods = 8;
-    opts.maxit = 20000;
+    nummods = 2;
+    opts.maxit = 40000;
     opts.disp = 1;
-    opts.p = nummods*4;
+    opts.p = 8*4;
     %opts.tol = eps*1e-3;
     % Set point sigma: NOTE If: Period = lamda/Uinf => Freq = Uinf/lamda => Omega = 2*pi*Freq;
     sigst = 'LR';
@@ -58,7 +58,7 @@ if strcmp(solver,'eigs')
 elseif strcmp(solver,'ode45')
 
     % Time steps to dump out
-    TSPAN = [0 120];
+    TSPAN = [0 240];
 
 
     if deterministicBCs == 'True'

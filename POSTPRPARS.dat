@@ -1,9 +1,9 @@
 # GENERAL POSTPROCESSING PARAMETERS
 0                           # Mode number to plot
-'results'                   # Path to results directory
+results                     # Path to results directory
 True                        # Normalises spatial growth (to see absolute growth/decay)
-True                        # Useful for visualisation
-0.5                         # Plot contours from +/-maxFactor*max(abs(V))
+True                        # Ignore temporal growth - useful for visualisation (otherwise movies decay to nothing)
+0.25                        # Plot contours from +/-maxFactor*max(abs(V))
 
 # MOVIE PARAMETERS
 5                           # Number of time periods to plot movie over
