@@ -1,4 +1,4 @@
-2000.0          # Reynolds number (based on displacement thickness of boundary layer) instability from Orr-Sommerfeld is at 5800 (corresponding wavenumber = 1.025)
+9000.0          # Reynolds number (based on displacement thickness of boundary layer) instability from Orr-Sommerfeld is at 5800 (corresponding wavenumber = 1.025)
 16              # Number of Chebyshev collocation points in the wall-normal direction
 90            	# Number of collocation points (panels) in the x-direction (for the solid wall elements) on the first (upstream) part of the lower wall
 20              # Number of collocation points (panels) in the x-direction (for the compliant wall elements)

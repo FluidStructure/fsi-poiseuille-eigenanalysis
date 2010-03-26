@@ -1174,6 +1174,7 @@ class ppEigs(postProc):
         show()
     
     def makeMovie(self,fnames=['evals_R5000.mat']):
+        pm = self.p.movie()
         #for fname in os.listdir(resultsDir):
         for fname in fnames:
             self.plotTimes(fname)
@@ -1201,8 +1202,8 @@ class ppEigs(postProc):
         L = float(vdict['LT'][0][0])
 
         # NOTE: figsize gives the figure size in inches @ 100dpi => 16=1200pixels
-        fig = plt.figure(figsize=(16,4))
-        ax = fig.add_subplot(111)
+        fig1 = plt.figure(figsize=(16,4))
+        #ax = fig1.add_subplot(111)
 
         print fname
         indict = loadmat(pg.resultsDir + '/' + fname,struct_as_record=True)
@@ -1221,7 +1222,6 @@ class ppEigs(postProc):
         f = 0
         Z = []
         for t in tRange:
-            ax.cla()
             
             timeComponent = exp(E*t)
             vmT = vm*timeComponent
@@ -1230,22 +1230,27 @@ class ppEigs(postProc):
                 relativeSpatialGrowth = zeros((len(y),len(x)))
                 for i in xrange(len(y)):
                     U = 1 - (y[i]**2)
+                    #U = 1.0
                     relativeSpatialGrowth[i,:] = exp(real(e)*(x/U))
                 vmT = multiply(vmT,relativeSpatialGrowth)
 
-            if Z == []:
-                m = np.max(real(vmT))
-                m = m*pg.maxFactor;
+            m = np.max(real(vmT))
+            m = m*pg.maxFactor;
+            if Z == []: 
+                Z = np.linspace(-1.0*m,m,20)
+            elif m > 2*np.max(Z) or m < 0.5*np.max(Z):
                 Z = np.linspace(-1.0*m,m,20)
 
             plt.contourf(x,y,vmT,Z)
             plt.axis('tight')
+            plt.colorbar()
             
             if dumpFigs == True:
                 fn = '_tmp%03d.png'%f
                 print 'Saving frame', fn
-                fig.savefig(fn)
+                fig1.savefig(fn)
             f += 1
+            fig1.clf()
 
 
 if __name__ == "__main__":
