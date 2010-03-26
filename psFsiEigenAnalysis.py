@@ -1173,7 +1173,7 @@ class ppEigs(postProc):
             self.plotTimes(fname,1,1)
         show()
     
-    def makeMovie(self,fnames=['evals_R5000.mat']):
+    def makeMovie(self,fnames=['filename.mat']):
         pm = self.p.movie()
         #for fname in os.listdir(resultsDir):
         for fname in fnames:
