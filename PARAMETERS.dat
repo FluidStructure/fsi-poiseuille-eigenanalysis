@@ -12,6 +12,7 @@
 True            # Calculate for the fluid only (assume rigid walls)
 False           # Allow slip at the boundary (prevent vorticity injection)
 True            # Deterministic boundary conditions
+True            # Periodic boundary conditions (left-inflow = right-outflow)
 Naive           # 'Naive' or 'FMM' - which solution methodology to use
 octave-3.2.3    # Octave version to use (for eigs and ode commands)
-eigs            # 'eigs' or 'ode45' - which solver to use
+ode45           # 'eigs' or 'ode45' - which solver to use

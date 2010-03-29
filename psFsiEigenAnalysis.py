@@ -69,9 +69,10 @@ class parameters():
             self.fluidOnly = self.parseBoolString(p[11])
             self.allowSlip = self.parseBoolString(p[12])
             self.deterministicBCs = self.parseBoolString(p[13])
-            self.method = p[14]
-            self.octave = p[15]
-            self.solver = p[16]
+            self.periodicBCs = self.parseBoolString(p[14])
+            self.method = p[15]
+            self.octave = p[16]
+            self.solver = p[17]
             
             # Some calculated fixed variables for the simulation
             self.Nx = self.Nup+self.Nco+self.Ndn                # Total number of panels along the length of the domain
@@ -574,7 +575,25 @@ class naiveMethod():
         MB = MB + dot(self.ICs['INwf'],MA)
 
         # Matrix "C" - Right hand side of fluid transport equation
-        MC = f.d1dx(eye(p.Nf),len(g.dy),p.dx,order=2)
+        if p.periodicBCs == False:
+            MC = f.d1dx(eye(p.Nf),len(g.dy),p.dx,order=2)
+            Tmp = f.d2dx(eye(p.Nf),len(g.dy),p.dx)              # Second derivative in the x-direction
+        else:
+            # Set up periodic finite difference matrices
+            n = p.Nf + 4*p.chebN                                # Add two columns of virtual fluid elements either side of domain
+            MC = f.d1dx(eye(n),len(g.dy),p.dx,order=2)
+            Tmp = f.d2dx(eye(n),len(g.dy),p.dx)                 # Second derivative in the x-direction
+            nrL = range(0,2*p.chebN)                            # Rows to remove (LEFT SIDE)
+            nrR = range(p.Nf+2*p.chebN,p.Nf+4*p.chebN)          # Rows to remove (RIGHT SIDE)
+            MC = delete(MC,nrL+nrR,axis=0)
+            Tmp = delete(Tmp,nrL+nrR,axis=0)
+            MC[:,p.Nf:2*p.chebN+p.Nf] = MC[:,p.Nf:2*p.chebN+p.Nf] + MC[:,nrL]
+            MC[:,2*p.chebN:4*p.chebN] = MC[:,2*p.chebN:4*p.chebN] + MC[:,nrR]
+            Tmp[:,p.Nf:2*p.chebN+p.Nf] = Tmp[:,p.Nf:2*p.chebN+p.Nf] + Tmp[:,nrL]
+            Tmp[:,2*p.chebN:4*p.chebN] = Tmp[:,2*p.chebN:4*p.chebN] + Tmp[:,nrR]
+            MC = delete(MC,nrL+nrR,axis=1)
+            Tmp = delete(Tmp,nrL+nrR,axis=1)
+            
         for i in xrange(p.Nf):
             s = mod(i,Ny)
             U = -1.0*(1 - (g.ycF[s]**2.0))
@@ -584,8 +603,8 @@ class naiveMethod():
         # Add the component due to y-direction mean-vorticity transport
         MC = MC + MB*2.0
         # Add diffusion terms
-        Tmp = f.d2dx(eye(p.Nf),len(g.dy),p.dx)              # Second derivative in the x-direction
-        # Second derivative in the y-direction
+        # --- Second derivative in x-direction calculated above as "Tmp"
+        # Second derivative in the y-direction - using Chebychev difference matrix
         for i in xrange(p.Nx):
             st = i*Ny
             fin = (i+1)*Ny
@@ -669,6 +688,19 @@ class naiveMethod():
 
         return None
 
+    def genPeriodicElements(self,x,y):
+        p = self.parameters
+        dx = p.dx
+        L = p.LT
+        if p.periodicBCs == True:
+            N = 20      # Number of periodic elements either side of current element
+        else:
+            N = 0
+        n = (2*N) + 1
+        xl = [x-(dx/2.0)+(L*(i-N)) for i in xrange(n)]
+        xr = [x+(dx/2.0)+(L*(i-N)) for i in xrange(n)]
+        return xl, xr
+
     def generateInfluenceCoefficients(self,forceMake=False,saveResults=True):
 
         p = self.parameters
@@ -679,7 +711,7 @@ class naiveMethod():
         if forceMake == False:
             if os.path.exists('ICs.mat') or os.path.exists('VARS.mat'):
                 invec = loadmat('VARS.mat',struct_as_record=True)
-                if (int(invec['Nx'])==p.Nx) and (int(invec['chebN'])==p.chebN) and (int(invec['LT'])==int(p.LT)):
+                if (int(invec['Nx'])==p.Nx) and (int(invec['chebN'])==p.chebN) and (int(invec['LT'])==int(p.LT)) and ('True' in invec['periodicBCs']) :
                     print 'Geometry seems to be the same as that already saved...'
                     print 'Loading existing Influence Coefficient matrices...'
                     self.ICs = loadmat('ICs.mat',struct_as_record=True)
@@ -710,7 +742,8 @@ class naiveMethod():
                 print 'Calculating fluid-all influence for fluid element ' + str(i) + ' of ' + str(Nf)
                 x = g.xcF[i]
                 y = g.ycF[i]
-                (U,V) = velocitylib.vortex_element_vel([x-(dx/2.0)],[y],[1.0],[x+(dx/2.0)],[y],[1.0],X,Y)
+                (xl,xr) = self.genPeriodicElements(x,y)
+                (U,V) = velocitylib.vortex_element_vel(xl,[y]*len(xl),[1.0]*len(xl),xr,[y]*len(xr),[1.0]*len(xr),X,Y)
                 self.ICs['INff'][:,i] = V[0:Nf]
                 self.ICs['ITff'][:,i] = U[0:Nf]
                 self.ICs['INfw'][:,i] = V[Nf:Nf+(2*Nw)]
@@ -725,7 +758,8 @@ class naiveMethod():
                 print 'Calculating wall-all influence for wall element ' + str(i) + ' of ' + str(Nw)
                 x = g.xcW[i]
                 y = g.ycW[i]
-                (U,V) = velocitylib.source_element_vel([x-(dx/2.0)],[y],[1.0],[x+(dx/2.0)],[y],[1.0],X,Y)
+                (xl,xr) = self.genPeriodicElements(x,y)
+                (U,V) = velocitylib.source_element_vel(xl,[y]*len(xl),[1.0]*len(xl),xr,[y]*len(xr),[1.0]*len(xr),X,Y)
                 self.ICs['INwf'][:,i] = V[0:Nf]
                 self.ICs['ITwf'][:,i] = U[0:Nf]
                 self.ICs['INww'][:,i] = V[Nf:Nf+(2*Nw)]
