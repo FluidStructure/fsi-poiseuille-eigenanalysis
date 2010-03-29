@@ -711,7 +711,7 @@ class naiveMethod():
         if forceMake == False:
             if os.path.exists('ICs.mat') or os.path.exists('VARS.mat'):
                 invec = loadmat('VARS.mat',struct_as_record=True)
-                if (int(invec['Nx'])==p.Nx) and (int(invec['chebN'])==p.chebN) and (int(invec['LT'])==int(p.LT)) and ('True' in invec['periodicBCs']) :
+                if (int(invec['Nx'])==p.Nx) and (int(invec['chebN'])==p.chebN) and (int(invec['LT'])==int(p.LT)) and (str(p.periodicBCs) in invec['periodicBCs']):
                     print 'Geometry seems to be the same as that already saved...'
                     print 'Loading existing Influence Coefficient matrices...'
                     self.ICs = loadmat('ICs.mat',struct_as_record=True)
