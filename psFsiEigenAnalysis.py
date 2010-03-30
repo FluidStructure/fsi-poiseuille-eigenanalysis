@@ -1158,6 +1158,37 @@ class postProc():
 
 class ppOde45(postProc):
     
+    def plotMonitors(self,eleList):
+        
+        n = len(eleList)
+        fig1 = plt.figure()
+
+        Rpath = self.getResultsDir()
+        fnames = self.getFilesByPrefix('TStep',Rpath)
+        f = 0
+        Z = [[] for i in xrange(n)]
+        t = []
+        for fname in fnames:
+            fpath = Rpath + fname
+            inDict = loadmat(fpath,struct_as_record=True)
+            v = inDict['y']
+            
+            t.append(indict['t'])
+            for i in xrange(n):
+                Z[i].append(v[eleList[i]])
+            
+            m = np.max(real(vmT))
+            m = m*pg.maxFactor;
+            if Z == []: 
+                Z = np.linspace(-1.0*m,m,20)
+            elif m > 2*np.max(Z) or m < 0.5*np.max(Z):
+                Z = np.linspace(-1.0*m,m,20)
+
+        plt.hold(True)
+        for i in xrange(n):
+            plt.plot(t,Z[i],'k-o')
+        plt.hold(False)
+    
     def makeMovie(self,dumpFigs=True):
         p = self.p.movie()
         g = self.g
@@ -1165,11 +1196,11 @@ class ppOde45(postProc):
         fig1 = plt.figure()
         fig1.set_figwidth(16);fig1.set_figheight(4)
 
-        Ny = ps.chebN
+        Ny = self.ps.chebN
         yc = g.yc
         if self.ps.deterministicBCs == True:
             yc = g.yc[1:Ny-1]
-            Ny = ps.chebN - 2
+            Ny = self.ps.chebN - 2
         
         Nx = self.ps.Nx
         if self.ps.fluidOnly == True:
@@ -1235,7 +1266,7 @@ class ppEigs(postProc):
         P = pm.P
 
         x = self.g.xc
-        if ps.deterministicBCs == True:
+        if self.ps.deterministicBCs == True:
             y = self.g.yc[1:len(self.g.yc)-1]
         else:
             y = self.g.yc
