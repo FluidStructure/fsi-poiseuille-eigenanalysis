@@ -1169,6 +1169,7 @@ class ppOde45(postProc):
         Z = [[] for i in xrange(n)]
         t = []
         for fname in fnames:
+            print 'Loading frame: ' + fname
             fpath = Rpath + fname
             inDict = loadmat(fpath,struct_as_record=True)
             v = inDict['y']
