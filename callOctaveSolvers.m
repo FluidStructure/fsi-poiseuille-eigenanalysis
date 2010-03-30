@@ -59,7 +59,7 @@ if strcmp(solver,'eigs')
     else
         fname = [path "_FSI"]
     end
-    path = [path '_R' num2str(round(R)) '.mat']
+    path = [path '_' num2str(round(chebN)) 'x' num2str(round(Nx)) '_R' num2str(round(R)) '.mat']
     save('-v7',fname,'Veigs','evals')
 
     % Save a vector for an initial guess for the next step
