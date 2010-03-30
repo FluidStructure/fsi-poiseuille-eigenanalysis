@@ -88,7 +88,7 @@ elseif strcmp(solver,'ode45')
     %	Y0(((nn-1)*Ny)+nny) = 1 - cos(pcx(nn));		% Initialise with a sin-wave disturbance along centre-line
     %end
 
-    vopt = odeset("RelTol", 1e-3, "AbsTol", 1e-3, "NormControl", "on", "MaxStep", 5e-2, "OutputFcn", @odeSaveVars);
+    vopt = odeset("RelTol", 1e-3, "AbsTol", 1e-3, "NormControl", "on", "MaxStep", 5e-2, "OutputFcn", @odeSaveVars());
     ode45 (@callPythonODE, TSPAN, Y0, vopt, A);
     %[TOUT,YOUT] = ode45(@callPythonODE,TSPAN,Y0);
     %save RESODE45.mat
@@ -145,7 +145,7 @@ endfunction
 
 function [] = writeMatFile(c,t,y)
 
-    path = ['results/' num2str(round(R))] 
+    path = ['results/' num2str(round(R))];
     if exist(path) ~= 7
         mkdir(path);
     end
@@ -155,7 +155,8 @@ function [] = writeMatFile(c,t,y)
     else
         fname = mvarname('path','FSI_',c);
     end
-    save('-v7',fname,'t','y')
+    disp(['Writing results to: ' fname])
+    save('-v7',fname,'t','y');
 
 endfunction
 
@@ -177,7 +178,7 @@ function [varargout] = odeSaveVars (vt, vy, vflag, varargin)
         t = vt(1,1);y = vy(:,1);
         vcounter = floor(t/dtOUT);
         disp(['vflag == empty, t = ' num2str(t) ', c = ' num2str(vcounter)])
-        writeMatFile(vcounter,t,y)
+        writeMatFile(vcounter,t,y);
 
     elseif (isempty (vflag))
         %# Return something in varargout{1}, either false for 'not stopping
@@ -187,7 +188,7 @@ function [varargout] = odeSaveVars (vt, vy, vflag, varargin)
         if s ~= vcounter
             vcounter = s; 
             disp(['vflag == empty, t = ' num2str(t) ', c = ' num2str(vcounter)])
-            writeMatFile(vcounter,t,y)
+            writeMatFile(vcounter,t,y);
         end
 
         %plot (vtold, vyold, '-o', 'markersize', 1); drawnow;
