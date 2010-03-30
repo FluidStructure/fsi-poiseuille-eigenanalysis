@@ -4,6 +4,7 @@ more off
 
 % Load the parameters
 load VARS.mat
+global R
 
 if strcmp(method,'Naive')
     load A.mat
@@ -14,7 +15,7 @@ end
 if strcmp(solver,'eigs')
 
     % Set some parameters
-    nummods = 2;
+    nummods = 6;
     opts.maxit = 40000;
     opts.disp = 1;
     opts.p = 8*4;
@@ -48,7 +49,15 @@ if strcmp(solver,'eigs')
     end
     evals = diag(Deigs)
 
-    fname = ["results/evals_R" num2str(R) ".mat"]
+    path = ['results/' num2str(round(R))] 
+    if exist(path) ~= 7
+        mkdir(path)
+    end
+    if strcmp(fluidOnly,'True')
+        fname = [path "/evals_FluidOnly.mat"]
+    else
+        fname = [path "/evals_FSI.mat"]
+    end
     save('-v7',fname,'Veigs','evals')
 
     % Save a vector for an initial guess for the next step
@@ -146,6 +155,12 @@ function [varargout] = odeSaveVars (vt, vy, vflag, varargin)
 
     % Timestep size for output (seconds)
     dtOUT = 0.25;
+
+    disp(vt)
+    disp(vy)
+    disp(vflag)
+    disp(varargin)
+    pause
 
     %# No input argument check is done for a higher processing speed
     %persistent vfigure;
