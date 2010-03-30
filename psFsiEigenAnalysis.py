@@ -1225,7 +1225,6 @@ class ppEigs(postProc):
         Np = pm.Np
         P = pm.P
 
-        vdict = loadmat('VARS.mat',struct_as_record=True)
         x = self.g.xc
         if ps.deterministicBCs == True:
             y = self.g.yc[1:len(self.g.yc)-1]
@@ -1233,7 +1232,7 @@ class ppEigs(postProc):
             y = self.g.yc
         x = array(x)
         y = array(y)
-        L = float(vdict['LT'][0][0])
+        L = ps.LT
 
         # NOTE: figsize gives the figure size in inches @ 100dpi => 16=1200pixels
         fig1 = plt.figure(figsize=(16,4))
