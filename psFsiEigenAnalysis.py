@@ -711,7 +711,7 @@ class naiveMethod():
         if forceMake == False:
             if os.path.exists('ICs.mat') or os.path.exists('VARS.mat'):
                 invec = loadmat('VARS.mat',struct_as_record=True)
-                if (int(invec['Nx'])==p.Nx) and (int(invec['chebN'])==p.chebN) and (int(invec['LT'])==int(p.LT)) and ('True' in invec['periodicBCs']) :
+                if (int(invec['Nx'])==p.Nx) and (int(invec['chebN'])==p.chebN) and (int(invec['LT'])==int(p.LT)) and (str(p.periodicBCs) in invec['periodicBCs']):
                     print 'Geometry seems to be the same as that already saved...'
                     print 'Loading existing Influence Coefficient matrices...'
                     self.ICs = loadmat('ICs.mat',struct_as_record=True)
@@ -1225,7 +1225,6 @@ class ppEigs(postProc):
         Np = pm.Np
         P = pm.P
 
-        vdict = loadmat('VARS.mat',struct_as_record=True)
         x = self.g.xc
         if ps.deterministicBCs == True:
             y = self.g.yc[1:len(self.g.yc)-1]
@@ -1233,7 +1232,7 @@ class ppEigs(postProc):
             y = self.g.yc
         x = array(x)
         y = array(y)
-        L = float(vdict['LT'][0][0])
+        L = ps.LT
 
         # NOTE: figsize gives the figure size in inches @ 100dpi => 16=1200pixels
         fig1 = plt.figure(figsize=(16,4))

@@ -144,10 +144,19 @@ endfunction
 
 
 function [] = writeMatFile(c,t,y)
-    fwnam = mvarname('results','TStep',c);
-    fwnam = strcat([fwnam '.mat']);
-    disp(['Saving result... to: '  fwnam])
-    save('-v7',fwnam,'t','y')
+
+    path = ['results/' num2str(round(R))] 
+    if exist(path) ~= 7
+        mkdir(path);
+    end
+
+    if strcmp(fluidOnly,'True')
+        fname = mvarname('path','FO_',c);
+    else
+        fname = mvarname('path','FSI_',c);
+    end
+    save('-v7',fname,'t','y')
+
 endfunction
 
 
