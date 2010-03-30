@@ -1129,8 +1129,10 @@ class postProc():
         self.p = parameters.postProcessing()
         self.g = geometry()
 
-    def getResultsDir(self):
-        Rpath = 'results/' + str(int(self.ps.R))
+    def getResultsDir(self,R = []):
+        if R == []:
+            R = int(self.ps.R)
+        Rpath = 'results/' + str(R)
         if self.ps.fluidOnly == True:
             Rpath = Rpath + '/fluidOnly/'
         else:
@@ -1158,37 +1160,40 @@ class postProc():
 
 class ppOde45(postProc):
     
-    def plotMonitors(self,eleList):
+    def plotMonitors(self,eleList,RList=[]):
         
+        if RList == []:
+            RList = [int(self.ps.R)]
+
         n = len(eleList)
         fig1 = plt.figure()
-
-        Rpath = self.getResultsDir()
-        fnames = self.getFilesByPrefix('TStep',Rpath)
-        f = 0
-        Z = [[] for i in xrange(n)]
-        t = []
-        for fname in fnames:
-            print 'Loading frame: ' + fname
-            fpath = Rpath + fname
-            inDict = loadmat(fpath,struct_as_record=True)
-            v = inDict['y']
-            
-            t.append(indict['t'])
-            for i in xrange(n):
-                Z[i].append(v[eleList[i]])
-            
-            m = np.max(real(vmT))
-            m = m*pg.maxFactor;
-            if Z == []: 
-                Z = np.linspace(-1.0*m,m,20)
-            elif m > 2*np.max(Z) or m < 0.5*np.max(Z):
-                Z = np.linspace(-1.0*m,m,20)
-
         plt.hold(True)
-        for i in xrange(n):
-            plt.plot(t,Z[i],'k-o')
+
+        for R in RList:
+            print 'Getting monitor points for R = ' + str(R)
+            Rpath = self.getResultsDir(R)
+            fnames = self.getFilesByPrefix('TStep',Rpath)
+            f = 0
+            Z = [[] for i in xrange(n)]
+            t = []
+            for fname in fnames:
+                print 'Loading frame: ' + fname
+                fpath = Rpath + fname
+                inDict = loadmat(fpath,struct_as_record=True)
+                v = inDict['y']
+                tt = inDict['t']
+                
+                t.append(tt[0][0])
+                for i in xrange(n):
+                    Z[i].append(v[eleList[i]][0])
+                
+            for i in xrange(n):
+                plt.plot(t,Z[i],'k-')
+
         plt.hold(False)
+        plt.grid(True)
+
+        fig1.savefig('plotMonitors.png')
     
     def makeMovie(self,dumpFigs=True):
         p = self.p.movie()
