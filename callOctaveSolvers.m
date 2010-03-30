@@ -3,8 +3,9 @@ function [] = callOctaveSolvers()
 more off
 
 % Load the parameters
-load VARS.mat
 global R
+global fluidOnly
+load VARS.mat
 
 if strcmp(method,'Naive')
     load A.mat
@@ -67,7 +68,7 @@ if strcmp(solver,'eigs')
 elseif strcmp(solver,'ode45')
 
     % Time steps to dump out
-    TSPAN = [0 240];
+    TSPAN = [0 480];
 
 
     if deterministicBCs == 'True'
@@ -145,18 +146,27 @@ endfunction
 
 function [] = writeMatFile(c,t,y)
 
-    path = ['results/' num2str(round(R))];
+    global R
+    global fluidOnly
+
+    path = ['results/' num2str(round(R))] 
     if exist(path) ~= 7
         mkdir(path);
     end
 
     if strcmp(fluidOnly,'True')
-        fname = mvarname('path','FO_',c);
+        path = [path '/fluidOnly']
     else
-        fname = mvarname('path','FSI_',c);
+        path = [path '/FSI']
     end
-    disp(['Writing results to: ' fname])
-    save('-v7',fname,'t','y');
+
+    if exist(path) ~= 7
+        mkdir(path);
+    end
+    fname = mvarname(path,'TStep_',c);
+    fname = [fname '.mat']
+    disp(['Writing results to ' fname])
+    save('-v7',fname,'t','y')
 
 endfunction
 
