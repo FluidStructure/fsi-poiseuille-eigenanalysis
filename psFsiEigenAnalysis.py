@@ -1,5 +1,5 @@
 from scipy import reshape, real, imag, array, exp, pi, linspace, divide, multiply
-from scipy import append, size, concatenate, dot, eye, mod, linalg
+from scipy import append, size, concatenate, dot, eye, mod, linalg, sum
 from scipy.io import savemat, loadmat
 import matplotlib.pyplot as plt
 from matplotlib.image import NonUniformImage
@@ -629,7 +629,6 @@ class naiveMethod():
                 b = t + p.chebN - 1
                 MD[t,:] = MD[t,:] - (MP[i,:]/g.dy[0])
                 MD[b,:] = MD[b,:] + (MP[p.Nx+i,:]/g.dy[p.chebN-1])
-        
         else:
             MP = columnwiseMultiply(self.ICs['ITfw'],[0.0])
             MP = concatenate((MP,zeros((p.Nx*2,Nn)),zeros((p.Nx*2,Nn))),axis=1)
@@ -643,10 +642,18 @@ class naiveMethod():
         # Matrix "G" - Left hand side of wall equation
         # First the wall inertia terms
         MG = concatenate((zeros((Nn,p.Nf)),zeros((Nn,Nn)),(p.rhow*p.hw)*eye(Nn)),axis=1)
-        # Add the pressure forcing terms
-        PF = p.dx*cumsum(MP[p.Nx+p.Nup:p.Nx+p.Nup+p.Nco-1,:],axis=0)
+        # Add the pressure forcing terms to LHS of wall equation
         Ntot = p.Nf + Nn*2
-        MG = MG + concatenate((zeros((1,Ntot)),PF,zeros((1,Ntot))),axis=0)
+        if p.deterministicBCs == True:
+            PF = p.dx*MAf[p.Nx+p.Nup:p.Nx+p.Nup+p.Nco,:]
+            PF = concatenate((zeros((1,Ntot)),PF),axis=0)
+            PF = -1.0*cumsum(PF,axis=0)
+            Pav = sum(PF,axis=0)/size(PF,0)                 # Get the average pressure across compliant wall
+            PF = PF - Pav                                   # Subtract this from the nodal pressure values
+            MG = MG + PF
+        else:
+            PF = p.dx*cumsum(MP[p.Nx+p.Nup:p.Nx+p.Nup+p.Nco-1,:],axis=0)
+            MG = MG + concatenate((zeros((1,Ntot)),PF,zeros((1,Ntot))),axis=0)
 
         # Matrix "H" - Right hand side of wall equation
         MH = f.d4dx(eye(Nn),1,p.dx)
@@ -657,7 +664,7 @@ class naiveMethod():
         self.RHS = concatenate((MC,MF,MH),axis=0)
 
         # Remove the end-nodes (which don't move) from the set of equations
-        nn = [p.Nf, p.Nf+Nn-1, p.Nf+Nn, p.Nf+2*Nn]    # Rows/columns to delete
+        nn = [p.Nf, p.Nf+Nn-1, p.Nf+Nn, p.Nf+2*Nn-1]    # Rows/columns to delete
         for i in xrange(2):
             self.LHS = delete(self.LHS,nn,axis=i)
             self.RHS = delete(self.RHS,nn,axis=i)

@@ -69,12 +69,17 @@ elseif strcmp(solver,'ode45')
     TSPAN = [0 480];
 
 
-    if deterministicBCs == 'True'
+    if strcmp(deterministicBCs,'True')
         Ny = chebN-2;
     else
         Ny = chebN;
     end
-    N = Ny*Nx;
+
+    if strcmp(fluidOnly,'True')
+        N = Ny*Nx
+    else
+        N = Ny*Nx + (Nco-1)*2;
+    end
     Y0 = zeros(N,1);
 
     nn = round(Nx/4)*Ny + round(Ny/2);
