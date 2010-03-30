@@ -1125,11 +1125,20 @@ class chebychev():
 class postProc():
 
     def __init__(self):
+        self.ps = parameters.simulation()
         self.p = parameters.postProcessing()
         self.g = geometry()
 
-    def getFilesByPrefix(self,prefix):
-        allFiles = os.listdir('results')
+    def getResultsDir(self):
+        Rpath = 'results/' + str(int(self.ps.R))
+        if self.ps.fluidOnly == True:
+            Rpath = Rpath + '/fluidOnly/'
+        else:
+            Rpath = Rpath + '/FSI/'
+        return Rpath
+
+    def getFilesByPrefix(self,prefix,Rpath):
+        allFiles = os.listdir(Rpath)
         files = []
         for f in allFiles:
             if prefix in f:
@@ -1155,25 +1164,25 @@ class ppOde45(postProc):
         pg = self.p.general()
         fig1 = plt.figure()
         fig1.set_figwidth(16);fig1.set_figheight(4)
-        vars = loadmat('VARS.mat',struct_as_record=True)
 
-        Ny = int(vars['chebN'])
+        Ny = ps.chebN
         yc = g.yc
-        if 'True' in vars['deterministicBCs']:
+        if self.ps.deterministicBCs == True:
             yc = g.yc[1:Ny-1]
-            Ny = int(vars['chebN']) - 2
-            
-        Nx = int(vars['Nx'])
-        if 'True' in str(vars['fluidOnly']):
+            Ny = ps.chebN - 2
+        
+        Nx = self.ps.Nx
+        if self.ps.fluidOnly == True:
             Ncw = 0
         else:
-            Ncw = (int(vars['Nco']) + 1)*2
+            Ncw = (self.ps.Nco + 1)*2
         
-        fnames = self.getFilesByPrefix('TStep')
+        Rpath = self.getResultsDir()
+        fnames = self.getFilesByPrefix('TStep',Rpath)
         f = 0
         Z = []
         for fname in fnames:
-            fpath = 'results/'+fname
+            fpath = Rpath + fname
             inDict = loadmat(fpath,struct_as_record=True)
             vmT = reshape(inDict['y'],(Ny,Nx),order='F')
             

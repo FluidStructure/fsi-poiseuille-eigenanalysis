@@ -50,15 +50,16 @@ if strcmp(solver,'eigs')
     end
     evals = diag(Deigs)
 
-    path = ['results/' num2str(round(R))] 
+    path = ['results/eigs'] 
     if exist(path) ~= 7
         mkdir(path)
     end
     if strcmp(fluidOnly,'True')
-        fname = [path "/evals_FluidOnly.mat"]
+        fname = [path "_FLO"]
     else
-        fname = [path "/evals_FSI.mat"]
+        fname = [path "_FSI"]
     end
+    path = [path '_R' num2str(round(R)) '.mat']
     save('-v7',fname,'Veigs','evals')
 
     % Save a vector for an initial guess for the next step
