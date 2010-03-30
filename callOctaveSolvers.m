@@ -145,6 +145,8 @@ endfunction
 
 function [] = writeMatFile(c,t,y)
 
+    global R
+
     path = ['results/' num2str(round(R))] 
     if exist(path) ~= 7
         mkdir(path);
