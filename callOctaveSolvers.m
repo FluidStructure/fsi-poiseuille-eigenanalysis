@@ -157,6 +157,7 @@ function [] = writeMatFile(c,t,y)
     else
         fname = mvarname('path','FSI_',c);
     end
+    disp(['Writing results to ' fname])
     save('-v7',fname,'t','y')
 
 endfunction
@@ -166,12 +167,6 @@ function [varargout] = odeSaveVars (vt, vy, vflag, varargin)
 
     % Timestep size for output (seconds)
     dtOUT = 0.25;
-
-    disp(vt)
-    disp(vy)
-    disp(vflag)
-    disp(varargin)
-    pause
 
     %# No input argument check is done for a higher processing speed
     %persistent vfigure;
