@@ -1252,7 +1252,7 @@ class ppOde45(postProc):
             o['M'] = M
             savemat('monitors.mat',o)
     
-    def makeMovie(self,prt='Fluid',R=[],fillConts=True,Nlevels=20,dumpFigs=True,keepFigs=False):
+    def makeMovie(self,prt='Fluid',R=[],fillConts=False,Nlevels=20,dumpFigs=True,keepFigs=False):
         '''
         prt = 'Fluid' or 'Wall' to plot wall or fluid displacements
         fillConts - plot with contourf or contour
@@ -1334,22 +1334,7 @@ class ppOde45(postProc):
 
 class ppEigs(postProc):
 
-    def plotFrameZero(self):
-        #for fname in os.listdir(resultsDir):
-        for fname in ['evals_R5000.mat']:
-            self.plotTimes(fname,1,1)
-        show()
-    
-    def makeMovie(self,fnames=['filename.mat']):
-        pm = self.p.movie()
-        #for fname in os.listdir(resultsDir):
-        for fname in fnames:
-            self.plotTimes(fname)
-            print 'Making movie animation.mpg - this make take a while'
-            os.system("mencoder 'mf://_tmp*.png' -mf type=png:fps=" + str(int(pm.fps)) + " -ovc lavc -lavcopts vcodec=" + pm.vcodec + " -nosound -o " + fname + ".avi")
-        os.system("rm -v *.png")
-
-    def plotTimes(self,fname,dumpFigs=True):
+    def makeMovie(self,fname,prt='Fluid',modeNum=0,fillConts=False,Nlevels=20,dumpFigs=True,keepFigs=False):
         
         pg = self.p.general()
         pm = self.p.movie()
@@ -1366,6 +1351,8 @@ class ppEigs(postProc):
         x = array(x)
         y = array(y)
         L = ps.LT
+        Nf = len(y)*len(x)
+        Nw = (ps.Nco-1)*2
 
         # NOTE: figsize gives the figure size in inches @ 100dpi => 16=1200pixels
         fig1 = plt.figure(figsize=(16,4))
@@ -1373,43 +1360,66 @@ class ppEigs(postProc):
 
         print fname
         indict = loadmat(pg.resultsDir + '/' + fname,struct_as_record=True)
-        v = [indict['Veigs'][i][pg.modeNum] for i in xrange(len(indict['Veigs']))]
-        e = indict['evals'][pg.modeNum][0]
+        v = [indict['Veigs'][i][modeNum] for i in xrange(len(indict['Veigs']))]
+        e = indict['evals'][modeNum][0]
         if pg.ignoreTemporalGrowth == True:
             E = complex(0,imag(e))
         else:
             E = e
         print 'Eigenvalue = ' + str(E)
 
-        vm = reshape(v,(len(y),len(x)),order='F')
+        if prt == 'Fluid':
+            vm = v[0:Nf]
+            vm = reshape(vm,(len(y),len(x)),order='F')
+        else:
+            vm = array(v[Nf:Nf+Nw])
+            vm = vm[0:Nw/2]
+            vm = concatenate(([0.0],vm,[0.0]))
 
         T = abs(2*pi/imag(e))
         tRange = linspace(0,T*P,Np*P,endpoint=pm.includeEndTime)
+        Mv = [[] for i in xrange(len(tRange))]
         f = 0
         Z = []
+        alim=1e-8
         for t in tRange:
             
             timeComponent = exp(E*t)
             vmT = vm*timeComponent
             vmT = real(vmT)
-            if pg.normalizeSpatialGrowth == True:
-                relativeSpatialGrowth = zeros((len(y),len(x)))
-                for i in xrange(len(y)):
-                    U = 1 - (y[i]**2)
-                    #U = 1.0
-                    relativeSpatialGrowth[i,:] = exp(real(e)*(x/U))
-                vmT = multiply(vmT,relativeSpatialGrowth)
+            if prt == 'Fluid':
+                if pg.normalizeSpatialGrowth == True:
+                    relativeSpatialGrowth = zeros((len(y),len(x)))
+                    for i in xrange(len(y)):
+                        U = 1 - (y[i]**2)
+                        #U = 1.0
+                        relativeSpatialGrowth[i,:] = exp(real(e)*(x/U))
+                    vmT = multiply(vmT,relativeSpatialGrowth)
 
-            m = np.max(real(vmT))
-            m = m*pg.maxFactor;
-            if Z == []: 
-                Z = np.linspace(-1.0*m,m,20)
-            elif m > 2*np.max(Z) or m < 0.5*np.max(Z):
-                Z = np.linspace(-1.0*m,m,20)
+                m = np.max(real(vmT))
+                m = m*pg.maxFactor;
+                if Z == []: 
+                    Z = np.linspace(-1.0*m,m,20)
+                elif m > 2*np.max(Z) or m < 0.5*np.max(Z):
+                    Z = np.linspace(-1.0*m,m,20)
 
-            plt.contourf(x,y,vmT,Z)
-            plt.axis('tight')
-            plt.colorbar()
+                if fillConts == True:
+                    plt.contourf(x,y,vmT,Z)
+                    plt.axis('tight')
+                    plt.colorbar()
+                else:
+                    l = ['dashed']*(Nlevels/2) + ['solid']*(Nlevels/2)
+                    plt.contour(x,y,vmT,Z,colors='k',linestyles=l)
+                    plt.axis('tight')
+                    plt.grid(True)
+            else:
+                plt.plot(vmT,'k-')
+                absmax = max(abs(vmT))
+                if absmax > alim:
+                    alim = absmax
+                plt.axis([0,len(vmT)-1,-1.0*alim,alim])
+                plt.grid(True)
+                Mv[f] = vmT
             
             if dumpFigs == True:
                 fn = '_tmp%04d.png'%f
@@ -1417,6 +1427,22 @@ class ppEigs(postProc):
                 fig1.savefig(fn)
             f += 1
             fig1.clf()
+        
+        if prt != 'Fluid':
+            a = plt.axes()
+            a.ticklabel_format(axis='y',scilimits=(-1,1))
+            plt.hold(True)
+            for i in xrange(len(Mv)):
+                plt.plot(Mv[i],'k-')
+            plt.hold(False)
+            plt.axis([0,len(vmT)-1,-1.0*alim,alim])
+            plt.grid(True)
+            fig1.savefig('wallSnapshots.eps')
+
+        print 'Making movie animation.mpg - this make take a while'
+        os.system("mencoder 'mf://_tmp*.png' -mf type=png:fps=" + str(int(pm.fps)) + " -ovc lavc -lavcopts vcodec=" + pm.vcodec + " -nosound -o eigs_" + prt + ".avi")
+        if keepFigs == False:        
+            os.system("rm -v *.png")
 
 
 if __name__ == "__main__":

@@ -1,15 +1,15 @@
-9000.0          # Reynolds number (based on displacement thickness of boundary layer) instability from Orr-Sommerfeld is at 5800 (corresponding wavenumber = 1.025)
+18000.0         # Reynolds number (based on displacement thickness of boundary layer) instability from Orr-Sommerfeld is at 5800 (corresponding wavenumber = 1.025)
 32              # Number of Chebyshev collocation points in the wall-normal direction
-80            	# Number of collocation points (panels) in the x-direction (for the solid wall elements) on the first (upstream) part of the lower wall
-40              # Number of collocation points (panels) in the x-direction (for the compliant wall elements)
-80            	# Number of collocation points (panels) in the x-direction (for the solid wall elements) on the second (downstream) part of the lower wall
+40            	# Number of collocation points (panels) in the x-direction (for the solid wall elements) on the first (upstream) part of the lower wall
+20              # Number of collocation points (panels) in the x-direction (for the compliant wall elements)
+40            	# Number of collocation points (panels) in the x-direction (for the solid wall elements) on the second (downstream) part of the lower wall
 30.0            # Length of the channel section
 1000.0          # Density of the wall material
 0.005           # Thickness of the wall
-1e2             # Damping coefficient of the backing-damping (N/m)
+1e1             # Damping coefficient of the backing-damping (N/m)
 2.592e7         # Youngs modulus of the wall material
-1e1             # Stiffness of the backing springs
-True            # Calculate for the fluid only (assume rigid walls)
+5e0             # Stiffness of the backing springs
+False           # Calculate for the fluid only (assume rigid walls)
 False           # Allow slip at the boundary (prevent vorticity injection)
 True            # Deterministic boundary conditions
 True            # Periodic boundary conditions (left-inflow = right-outflow)
