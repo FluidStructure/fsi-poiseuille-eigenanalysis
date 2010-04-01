@@ -1,5 +1,5 @@
 from scipy import reshape, real, imag, array, exp, pi, linspace, divide, multiply
-from scipy import append, size, concatenate, dot, eye, mod, linalg, sum
+from scipy import append, size, concatenate, dot, eye, mod, linalg, sum, column_stack
 from scipy.io import savemat, loadmat
 import matplotlib.pyplot as plt
 from matplotlib.image import NonUniformImage
@@ -1136,6 +1136,23 @@ class postProc():
         self.p = parameters.postProcessing()
         self.g = geometry()
 
+    def incLineType(self,k):
+        if k == 0:
+            lt = 'k-'
+        elif k == 1:
+            lt = 'k--'
+        elif k == 2:
+            lt = 'k-.'
+        elif k == 3:
+            lt = 'k:'
+        elif k == 4:
+            lt = 'k-o'
+        elif k == 5:
+            lt = 'k-v'
+        else:
+            lt = 'k-'
+        return lt
+
     def getResultsDir(self,R = []):
         if R == []:
             R = int(self.ps.R)
@@ -1167,20 +1184,41 @@ class postProc():
 
 class ppOde45(postProc):
     
-    def plotMonitors(self,eleList,RList=[]):
+    def plotMonitors(self,eleList,RList=[],ax=[],leg=[],legLoc=0,saveMats=False):
+        '''
+        RList is a list of integers or strings that state the directory in which to
+        extract results from within the "results" directory.
         
+        eleList is a list of integers or a list of lists of integers which are the elements
+        from which to extract the useful information.  NOTE: if RList is undefined then
+        len(eleList) = 1 else the length of eleList must equal the length of Rlist.
+        '''        
+
         if RList == []:
             RList = [int(self.ps.R)]
 
-        n = len(eleList)
         fig1 = plt.figure()
+        plt.xlabel('Time (s)')
+        plt.ylabel('Perterbation vorticity at monitor point')
+        a = plt.axes()
+        a.ticklabel_format(axis='y',scilimits=(-1,1))
         plt.hold(True)
+        
+        M = [[] for i in xrange(len(RList))]
 
+        k = 0
         for R in RList:
             print 'Getting monitor points for R = ' + str(R)
             Rpath = self.getResultsDir(R)
             fnames = self.getFilesByPrefix('TStep',Rpath)
             f = 0
+
+            if type(eleList[k]) == list:
+                n = len(eleList[k])
+            else:
+                n = 1
+                eleList[k] = [eleList[k]]
+
             Z = [[] for i in xrange(n)]
             t = []
             for fname in fnames:
@@ -1192,17 +1230,37 @@ class ppOde45(postProc):
                 
                 t.append(tt[0][0])
                 for i in xrange(n):
-                    Z[i].append(v[eleList[i]][0])
+                    Z[i].append(v[eleList[k][i]][0])
                 
+            M[k] = Z
             for i in xrange(n):
-                plt.plot(t,Z[i],'k-')
+                plt.plot(t,Z[i],self.incLineType(k))
+            k += 1
 
         plt.hold(False)
         plt.grid(True)
+        
+        if ax != []:
+            plt.axis(ax)
+        if leg != []:
+            plt.legend(leg,loc=legLoc)
+        fig1.savefig('plotMonitors.eps')
 
-        fig1.savefig('plotMonitors.png')
+        if saveMats == True:
+            print 'Saving matrix to file monitors.mat'
+            o = {}
+            o['M'] = M
+            savemat('monitors.mat',o)
     
-    def makeMovie(self,prt='Fluid',dumpFigs=True):
+    def makeMovie(self,prt='Fluid',R=[],fillConts=True,Nlevels=20,dumpFigs=True,keepFigs=False):
+        '''
+        prt = 'Fluid' or 'Wall' to plot wall or fluid displacements
+        fillConts - plot with contourf or contour
+        '''
+
+        if R == []:
+            R = int(self.ps.R)
+
         p = self.p.movie()
         g = self.g
         pg = self.p.general()
@@ -1222,7 +1280,7 @@ class ppOde45(postProc):
             Ncw = (self.ps.Nco + 1)*2
 
         Nco = self.ps.Nco
-        Rpath = self.getResultsDir()
+        Rpath = self.getResultsDir(R)
         fnames = self.getFilesByPrefix('TStep',Rpath)
         f = 0
         Z = []
@@ -1237,13 +1295,21 @@ class ppOde45(postProc):
                 m = np.max(real(vmT))
                 m = m*pg.maxFactor;
                 if Z == []: 
-                    Z = np.linspace(-1.0*m,m,20)
+                    Z = np.linspace(-1.0*m,m,Nlevels)
                 elif m > 2*np.max(Z) or m < 0.5*np.max(Z):
-                    Z = np.linspace(-1.0*m,m,20)
+                    Z = np.linspace(-1.0*m,m,Nlevels)
 
-                plt.contourf(g.xc,yc,vmT,Z)
-                plt.axis('tight')
-                plt.colorbar()
+                plt.xlabel('x-position (m)')
+                plt.ylabel('y-position (m)')
+                if fillConts == True:
+                    plt.contourf(g.xc,yc,vmT,Z)
+                    plt.axis('tight')
+                    plt.colorbar()
+                else:
+                    l = ['dashed']*(Nlevels/2) + ['solid']*(Nlevels/2)
+                    plt.contour(g.xc,yc,vmT,Z,colors='k',linestyles=l)
+                    plt.axis('tight')
+                    plt.grid(True)
             else:
                 vm = inDict['y'][Ny*Nx:Ny*Nx+Nco-1]
                 vm = concatenate(([0.0],vm[:,0],[0.0]))
@@ -1263,7 +1329,8 @@ class ppOde45(postProc):
         
         print 'Making movie animation.mpg - this make take a while'
         os.system("mencoder 'mf://_tmp*.png' -mf type=png:fps=" + str(int(p.fps)) + " -ovc lavc -lavcopts vcodec=" + p.vcodec + " -nosound -o ode45_" + prt + ".avi")
-        os.system("rm -v *.png")
+        if keepFigs == False:        
+            os.system("rm -v *.png")
 
 class ppEigs(postProc):
 
