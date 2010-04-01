@@ -645,7 +645,7 @@ class naiveMethod():
         # Add the pressure forcing terms to LHS of wall equation
         Ntot = p.Nf + Nn*2
         if p.deterministicBCs == True:
-            PF = p.dx*MAf[p.Nx+p.Nup:p.Nx+p.Nup+p.Nco,:]
+            PF = g.dy[0]*p.dx*MAf[p.Nx+p.Nup:p.Nx+p.Nup+p.Nco,:]
             PF = concatenate((zeros((1,Ntot)),PF),axis=0)
             PF = -1.0*cumsum(PF,axis=0)
             Pav = sum(PF,axis=0)/size(PF,0)                 # Get the average pressure across compliant wall
@@ -1202,7 +1202,7 @@ class ppOde45(postProc):
 
         fig1.savefig('plotMonitors.png')
     
-    def makeMovie(self,dumpFigs=True):
+    def makeMovie(self,prt='Fluid',dumpFigs=True):
         p = self.p.movie()
         g = self.g
         pg = self.p.general()
@@ -1220,36 +1220,49 @@ class ppOde45(postProc):
             Ncw = 0
         else:
             Ncw = (self.ps.Nco + 1)*2
-        
+
+        Nco = self.ps.Nco
         Rpath = self.getResultsDir()
         fnames = self.getFilesByPrefix('TStep',Rpath)
         f = 0
         Z = []
+        alim = 1.0e-8
         for fname in fnames:
             fpath = Rpath + fname
             inDict = loadmat(fpath,struct_as_record=True)
-            vmT = reshape(inDict['y'],(Ny,Nx),order='F')
-            
-            m = np.max(real(vmT))
-            m = m*pg.maxFactor;
-            if Z == []: 
-                Z = np.linspace(-1.0*m,m,20)
-            elif m > 2*np.max(Z) or m < 0.5*np.max(Z):
-                Z = np.linspace(-1.0*m,m,20)
+            if prt == 'Fluid':
+                vm = inDict['y'][0:Ny*Nx]
+                vmT = reshape(vm,(Ny,Nx),order='F')
+                
+                m = np.max(real(vmT))
+                m = m*pg.maxFactor;
+                if Z == []: 
+                    Z = np.linspace(-1.0*m,m,20)
+                elif m > 2*np.max(Z) or m < 0.5*np.max(Z):
+                    Z = np.linspace(-1.0*m,m,20)
 
-            plt.contourf(g.xc,yc,vmT,Z)
-            plt.axis('tight')
-            plt.colorbar()
-              
+                plt.contourf(g.xc,yc,vmT,Z)
+                plt.axis('tight')
+                plt.colorbar()
+            else:
+                vm = inDict['y'][Ny*Nx:Ny*Nx+Nco-1]
+                vm = concatenate(([0.0],vm[:,0],[0.0]))
+                plt.plot(vm,'k-')
+                absmax = max(abs(vm))
+                if absmax > alim:
+                    alim = absmax
+                plt.axis([0,len(vm)-1,-1.0*alim,alim])
+                plt.grid(True)
+
             if dumpFigs == True:
-                fn = '_tmp%03d.png'%f
+                fn = '_tmp%04d.png'%f
                 print 'Saving frame', fn
                 fig1.savefig(fn)
             fig1.clf()
             f += 1
         
         print 'Making movie animation.mpg - this make take a while'
-        os.system("mencoder 'mf://_tmp*.png' -mf type=png:fps=" + str(int(p.fps)) + " -ovc lavc -lavcopts vcodec=" + p.vcodec + " -nosound -o ode45.avi")
+        os.system("mencoder 'mf://_tmp*.png' -mf type=png:fps=" + str(int(p.fps)) + " -ovc lavc -lavcopts vcodec=" + p.vcodec + " -nosound -o ode45_" + prt + ".avi")
         os.system("rm -v *.png")
 
 class ppEigs(postProc):
@@ -1332,7 +1345,7 @@ class ppEigs(postProc):
             plt.colorbar()
             
             if dumpFigs == True:
-                fn = '_tmp%03d.png'%f
+                fn = '_tmp%04d.png'%f
                 print 'Saving frame', fn
                 fig1.savefig(fn)
             f += 1
