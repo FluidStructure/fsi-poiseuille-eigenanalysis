@@ -14,6 +14,7 @@ import pdb
 import sys
 sys.path.append('../python_tools.git/')
 import velocitylib
+import octFuncs
 
 def merr(self,msg):
     raise TypeError(msg)
@@ -170,7 +171,71 @@ class geometry():
         self.ycW = append(((pcx*0.0)+1.0),((pcx*0.0)-1.0))
 
 class fmmMethod():
+
+
+    def __init__(self):
+        self.parameters = parameters.simulation()
+        self.geometry = geometry()
+
+    def runSolver(self):
+        p = self.parameters
+        if p.solver == "ODE45":
+            self.setInitialConditions()
+            ode = octFuncs.ode()
+            ode.ode45(self.RHS,tslot,s.yo)
+        elif p.solver == "EIGS":
+            print("Sorry not yet implemented")
+            #self.callOctave()
+
+    def callOctave(self):
+        # Save generalised matrix to A.mat
+        outDict = {}
+        outDict['A'] = self.RHSGeneral
+        savemat('A.mat',outDict)
+        # Run octave script from command line
+        os.system(self.parameters.octave + ' --eval callOctaveSolvers.m')
     
+    def multRHSfluid(self,v):
+        p = self.parameters
+        g = self.geometry
+        f = finiteDifference()
+        
+        Nn = p.Nco + 1      # The number of nodes in the compliant panel section
+        Ny = p.chebN        # The number of vertical fluid elements
+        
+        # Multiply flow element strengths "v" by element height
+        
+        # Get the wall panel vertical velocities (in the compliant section)
+        # Get the normal and tangential velocities at the wall and fluid elements due to fluid elements
+        # Solve for wall source strengths and nearest-to-wall flow element strengths together
+        
+        # Get the normal velocity at fluid elements due to wall elements
+        # Add to normal velocity at fluid elements due to themselves (already calculated)
+        
+        # Calculate convective components (finite difference) for RHS of fluid transport
+        if p.periodicBCs == 'False':
+            print('fds')
+            # Just do a normal finite diference
+        else:
+            print('fds')
+            # Do a cyclic finite difference
+        # Multiply gradients calculated by the local mean velocity
+        
+        # Calculate second-derivatives for diffusive terms
+        return vdot
+        
+    def multRHSwall(self,v):
+        # State equation for "v1_dot = v2"
+
+        # Get the average pressure across the lower wall (for cyclic) or at a point (for absolute)
+        # -- Get the tangential velocity at the wall
+        
+        # Divide by (p.rhow*p.hw)
+        return vdot
+        
+
+        
+
     def runFMM(vv,sigma):
         # Read in parameters for the system
         (nu,dx,Nx,Nup,Nco,Ndn,chebN,d2dy,xw,yw,pcxx,pcyy,B,K,d,rhow,hw,dy) = getParams()
@@ -803,330 +868,8 @@ class naiveMethod():
 
         return None
 
-class finiteDifference():
-
-    def getInputShape(self,n):
-        if size(n) == size(n,0):
-            nr = size(n,0)
-            nc = 0
-            R = zeros(nr)
-        else:
-            nr = size(n,0)
-            nc = size(n,1)
-            R = zeros((nr,nc))
-        return nr, R    
-
-    def d4dx(self,n,N,dx):
-        # Calculates the 4th order derivative of vector 'n' using finite difference
-        # method applied to every 'N'th element with an element spacing of 'dx'
-        # NOTE: if 'v' is a square Identity matrix of type 'array' then the output is a square matrix
-        # that includes the finite difference coefficients
-        (nn,R) = self.getInputShape(n)
-        # Only hinged-hinged conditions for now
-        i = 0;R[i] = 0.0 - 4.0*0.0 + 0.0*n[i] - 4.0*n[i+N] + n[i+2*N]
-        i = 1;R[i] = 0.0 - 4.0*n[i-N] + 5.0*n[i] - 4.0*n[i+N] + n[i+2*N]
-        i = nn-2;R[i] = n[i-2*N] - 4.0*n[i-N] + 5.0*n[i] - 4.0*n[i+N] + 0.0
-        i = nn-1;R[i] = n[i-2*N] - 4.0*n[i-N] + 0.0*n[i] - 0.0 + 0.0
-        for i in range(2,nn-2):
-            R[i] = n[i-2*N] - 4.0*n[i-N] + 6.0*n[i] - 4.0*n[i+N] + n[i+2*N]
-        R = R/(dx**4.0)
-        return R
-
-    def d2dx(self,v,N,dx):
-        (nn,R) = self.getInputShape(v)
-        dxsq = dx**2.0
-        for i in range(0,nn):
-            if (i < N):
-                R[i] = (0 - 2.0*v[i] + 1.0*v[i+N])      # Hinged end condition (upstream virtual node = 0)
-            elif (i >= nn-N):
-                R[i] = (2.0*v[i-N] - 2.0*v[i] + 0.0)       # Free end conditions (downstream gradient = 0)
-            else:
-                R[i] = (v[i-N] - 2.0*v[i] + v[i+N])
-        R = R/(dx**2.0)
-        return R
-
-    def d1dx(self,v,N,dx,order=2):
-        # Evaluate the x-direction gradient
-        (nn,R) = self.getInputShape(v)
-        if order == 1:
-            # Use a first order (upwind) scheme
-            for i in range(0,nn):
-                if (i < N):
-                    R[i] = v[i]/dx        # Hinged end condition (virtual node = 0)
-                else:
-                    R[i] = (v[i] - v[i-N])/dx
-        elif order == 2:
-            # Use a second order upwinding scheme
-            for i in range(0,nn):
-                if i< N:
-                    #R[i] = (-1*0 +4*0 - 3*v[i])/(2*dx)
-                    R[i] = v[i]/dx              # First order upwind on the first node
-                elif i < 2*N:
-                    #R[i] = (-1*0 +4*v[i-N] - 3*v[i])/(2*dx)
-                    R[i] = (v[i] - v[i-N])/dx   # First order upwind on the second node
-                else:
-                    R[i] = (1.0*v[i-2*N] - 4.0*v[i-N] + 3.0*v[i])/(2.0*dx)
-        elif order == 3:
-            # Use a third order upwinding scheme
-            for i in range(0,nn):
-                if i< N:
-                    # First order for the first node
-                    #R[i] = (-1*0 + 6*0 - 3*v[i] -2*v[i+N])/(6*dx)
-                    R[i] = v[i]/dx
-                elif i < 2*N:
-                    R[i] = (1.0*0 - 6.0*v[i-N] + 3.0*v[i] + 2.0*v[i+N])/(6.0*dx)
-                elif i >= nn-N:
-                    # Second order upwind for the second last node
-                    R[i] = (1.0*v[i-2*N] - 4.0*v[i-N] + 3.0*v[i])/(2.0*dx)
-                else:
-                    R[i] = (1.0*v[i-2*N] - 6.0*v[i-N] + 3.0*v[i] + 2.0*v[i+N])/(6.0*dx)
-        return R
 
 
-class chebychev():
-
-    def chebdif(self,N,M):
-
-        from numpy import eye, floor, ceil, sin, cos, ones
-        from numpy import zeros, matrix, mat, linspace, transpose
-        from numpy import pi, arange, repeat, dot, flipud, fliplr
-        from numpy import bmat, power, diag, sum, logical_not
-        from numpy import multiply, array, size
-        from scipy.linalg.basic import toeplitz
-
-        """
-        function [x, DM] = chebdif(N, M)
-
-        %  The function [x, DM] =  chebdif(N,M) computes the differentiation 
-        %  matrices D1, D2, ..., DM on Chebyshev nodes. 
-        % 
-        %  Input:
-        %  N:        Size of differentiation matrix.        
-        %  M:        Number of derivatives required (integer).
-        %  Note:     0 < M <= N-1.
-        %
-        %  Output:
-        %  DM:       DM(1:N,1:N,ell) contains ell-th derivative matrix, ell=1..M.
-        %
-        %  The code implements two strategies for enhanced 
-        %  accuracy suggested by W. Don and S. Solomonoff in 
-        %  SIAM J. Sci. Comp. Vol. 6, pp. 1253--1268 (1994).
-        %  The two strategies are (a) the use of trigonometric 
-        %  identities to avoid the computation of differences 
-        %  x(k)-x(j) and (b) the use of the "flipping trick"
-        %  which is necessary since sin t can be computed to high
-        %  relative precision when t is small whereas sin (pi-t) cannot.
-        %  Note added May 2003:  It may, in fact, be slightly better not to
-        %  implement the strategies (a) and (b).   Please consult the following
-        %  paper for details:   "Spectral Differencing with a Twist", by
-        %  R. Baltensperger and M.R. Trummer, to appear in SIAM J. Sci. Comp. 
-
-        %  J.A.C. Weideman, S.C. Reddy 1998.  Help notes modified by 
-        %  JACW, May 2003.
-        """
-        
-        I = eye(N)                          # Identity matrix.     
-        L = logical_not(1 - I)              #L = logical(I) # Logical identity matrix.
-
-        n1 = floor(N/2) 
-        n2  = ceil(N/2)                     # Indices used for flipping trick.
-
-        k = matrix(linspace(0,N-1,N))
-        k = transpose(k)                    # k = [0:N-1]' # Compute theta vector.
-        
-        th = k*pi/(N-1)
-
-        x = sin(pi*transpose(mat(arange(N-1,1-N-1,-2)))/(2*(N-1)))    # Compute Chebyshev points.
-
-        T = repeat(th/2,N,axis=1)              
-        DX = multiply(2*sin(transpose(T)+T),sin(transpose(T)-T))        # Trigonometric identity. 
-        DX = bmat([[DX[0:n1,:]],[-1*flipud(fliplr(DX[0:n2,:]))]])       # Flipping trick. 
-        DX[L] = ones(N)                                                 # Put 1's on the main diagonal of DX.
-        
-        C = mat(toeplitz(power(-1,k)))               # C is the matrix with 
-        C[0,:] = C[0,:]*2
-        C[N-1,:] = C[N-1,:]*2                   # entries c(k)/c(j)
-        C[:,0] = C[:,0]/2
-        C[:,N-1] = C[:,N-1]/2
-        
-        Z = 1/DX                                # Z contains entries 1/(x(k)-x(j))
-        Z[L] = zeros(N)                         # with zeros on the diagonal.
-        
-        D = eye(N)                              # D contains diff. matrices.
-        
-        DM = {}                                 # Initialize a dictionary for holding D matrices 
-        
-        for ell in range(1,M+1):
-            D = multiply((ell*Z),multiply(C,repeat(transpose(mat(diag(D))),N,axis=1))-D)      # Off-diagonals
-            D[L] = -1*sum(transpose(array(D)),axis=0)                                     # Correct main diagonal of D
-            DM[ell] = D                                                     # Store current D in DM
-
-        return x, DM
-
-
-    def cheb2bc(self,N,g):
-    
-        from numpy import eye, floor, ceil, sin, cos, ones
-        from numpy import zeros, matrix, mat, linspace, transpose
-        from numpy import pi, arange, repeat, dot, flipud, fliplr
-        from numpy import bmat, power, diag, sum, logical_not
-        from numpy import multiply, array, size
-        from scipy.linalg.basic import toeplitz    
-    
-        """
-        function [xt,D2t,D1t,phip,phim]=cheb2bc(N,g);
-        %
-        % Program for computing first and second derivative matrices and
-        % and boundary condition functions for 2 point boundary conditions
-        %
-        %  a_1 u(1)  + b_1 u'(1)  = c_1
-        %  a_N u(-1) + b_N u'(-1) = c_N
-        %
-        %
-        % INPUT 
-        % N        =  number of Chebyshev points in [-1,1]
-        % g        =  boundary condition matrix = [a_1 b_1 c_1; a_N b_N c_N]
-        % 
-        % OUTPUT  
-        % xt       =  Chebyshev points corresponding to rows and columns
-        %             of D1t and D2t
-        % D1t      =  1st derivative matrix incorporating bc
-        % D2t      =  2nd derivative matrix incorporating bc
-        % phip     =  1st and 2nd derivative of bc function at x=1
-        %             (array with 2 columns)
-        % phim     =  1st and 2nd derivative of bc function at x=-1 
-        %             (array with 2 columns)
-
-        % S.C. Reddy, J.A.C. Weideman  1998
-        """
-
-
-        # Get differentiation matrices
-        (x,DM) = self.chebdif(N,2)
-        D0=mat(eye(N,N))
-        D1=DM[1]
-        D2=DM[2]
-
-        # extract boundary condition coefficients
-        a1=g[0,0]; b1=g[0,1]; c1=g[0,2];
-        aN=g[1,0]; bN=g[1,1]; cN=g[1,2];
-
-        # Case 0: Invalid boundary condition information
-        if ((a1==0.0 and b1==0.0) or (aN==0.0 and bN==0.0)):
-            print 'Invalid boundary condition information (no output)'
-            
-        elif ((b1==0.0) and (bN==0.0)):                 # Dirichlet/Dirichlet 
-            
-            J=mat(arange(2,N)) - 1
-            K=transpose(mat(arange(2,N))) - 1
-            D1t=D1[J,K]
-            D2t=D2[J,K]
-            phip=c1*bmat([D1[K,0], D2[K,0]])/a1     # phi_+
-            phim=cN*bmat([D1[K,N], D2[K,N]])/aN     # phi_- 
-            xt=x[K]                                 # node vector 
-            
-        elif ((b1!=0.0) and (bN==0.0)):             # Dirichlet x=-1, Robin x=1
-            
-            J = mat(arange(2,N)) - 1
-            K = transpose(mat(arange(1,N))) - 1
-            xjrow=2*power(sin(J*pi/2/(N-1)),2)      # 1-x_j, using trig identity
-            xkcol=2*power(sin(K*pi/2/(N-1)),2)      # 1-x_k, using trig identity
-            oner=mat(ones((size(xkcol,axis=0),size(xkcol,axis=1))))     # column of ones
-
-            fac0 = oner*(1/xjrow)                   # matrix -1/(1-x_j)
-            fac1 = xkcol*(1/xjrow)                  # matrix (1-x_k)/(1-x_j)
-            D1t = multiply(fac1,D1[K,J])-multiply(fac0,D0[K,J])
-            D2t = multiply(fac1,D2[K,J])-2*multiply(fac0,D1[K,J]) 
-
-            cfac = D1[0,0]+a1/b1                    # compute phi'_1, phi''_1
-            fcol1 = -cfac*D0[K,0]+multiply((1+cfac*xkcol),D1[K,0])
-            fcol2 = -2*cfac*D1[K,0]+multiply((1+cfac*xkcol),D2[K,0])
-            D1t  = bmat([fcol1,D1t])
-            D2t  = bmat([fcol2,D2t])
-
-            phim = multiply(xkcol,(D1(K,N-1)/2))-(D0(K,N-1)/2)      # phi'_-, phi''_- 
-            phim = cN*bmat([phim,multiply(xkcol,D2(K,N-1)/2)-D1(K,N-1)])/aN
-
-            phip = multiply(-1*xkcol,D1(K,0))+D0(K,0)           # phi'_+, phi''_+ 
-            phip = c1*bmat([phip,-1*multiply(xkcol,D2(K,0))+2*D1(K,0)])/b1
-            
-            xt = x[K]                                           # node vector
-
-        elif ((b1==0.0) and (bN!=0.0)):
-            # Case 3: Dirichlet at x=1 and Neumann or Robin boundary x=-1.
-
-            J = mat(arange(2,N)) - 1 
-            K = transpose(mat(arange(1,N+1))) - 1
-            xjrow=2*power(cos(J*pi/2/(N-1)),2)      # 1+x_j, using trig identity
-            xkcol=2*power(cos(K*pi/2/(N-1)),2)      # 1+x_k, using trig identity
-            oner=mat(ones((size(xkcol,axis=0),size(xkcol,axis=1))))                # column of ones
-
-            fac0 = oner*(1/xjrow)                   # matrix 1/(1+x_j)
-            fac1 = xkcol*(1/xjrow)                  # matrix (1+x_k)/(1+x_j)
-            D1t = multiply(fac1,D1[K,J])+multiply(fac0,D0[K,J])
-            D2t = multiply(fac1,D2[K,J])+2*multiply(fac0,D1[K,J]) 
-
-            cfac = D1[N-1,N-1]+aN/bN                # compute phi'_N, phi''_N
-            lcol1 = -cfac*D0[K,N-1]+multiply((1-cfac*xkcol),D1[K,N-1])
-            lcol2 = -2*cfac*D1[K,N-1]+multiply((1-cfac*xkcol),D2[K,N-1])
-            D1t  = bmat([D1t,lcol1])
-            D2t  = bmat([D2t,lcol2])
-
-            phim = multiply(xkcol,(D1[K,N-1]))+(D0[K,N-1])      # phi'_-, phi''_- 
-            phim = cN*bmat([phim,multiply(xkcol,D2[K,N-1])+2*D1[K,N-1]])/bN
-
-            phip = multiply(xkcol,(D1[K,0]/2))+D0[K,0]          # phi'_+, phi''_+ 
-            phip = c1*bmat([phip,multiply(xkcol,D2[K,0]/2)+D1[K,0]])/a1
-
-            xt = x[K];                                          # node vector
-
-        elif ((b1!=0.0) and (bN!=0.0)):
-
-            # Case 4: Neumann or Robin boundary conditions at both endpoints. 
-
-            J = mat(arange(2,N)) - 1
-            K = transpose(mat(arange(1,N+1))) - 1
-            xkcol0=power(sin((K)*pi/(N-1)),2)           # 1-x_k^2 using trig identity
-            xkcol1=transpose(-2*x[K])                   # -2*x_k 
-            xkcol2=-2*mat(ones((size(xkcol0,axis=0),size(xkcol0,axis=1))))  # -2
-            xjrow=1/power(sin((J)*pi/(N-1)),2)          # 1-x_j^2 using trig identity
-
-            fac0=xkcol0*xjrow
-            fac1=xkcol1*xjrow
-            fac2=xkcol2*xjrow
-
-            D1t=multiply(fac0,D1[K,J])+multiply(fac1,D0[K,J])
-            D2t=multiply(fac0,D2[K,J])+multiply(2*fac1,D1[K,J])+multiply(fac2,D0[K,J])
-
-            omx=power(sin((K)*pi/2/(N-1)),2)                # (1-x_k)/2 
-            opx=power(cos((K)*pi/2/(N-1)),2)                # (1+x_k)/2
-
-            r0=opx+(0.5+D1[0,0]+a1/b1)*xkcol0/2             # compute phi'_1, phi''_1
-            r1=0.5-(0.5+D1[0,0]+a1/b1)*x
-            r2=-0.5-D1[0,0]-a1/b1
-            rcol1=multiply(r0,D1[K,0])+multiply(r1,D0[K,0])
-            rcol2=multiply(r0,D2[K,0])+multiply(2*r1,D1[K,0])+multiply(r2,D0[K,0])
-
-            l0=omx+(0.5-D1[N-1,N-1]-aN/bN)*xkcol0/2            # compute phi'_N, phi''_N
-            l1=-0.5+(D1[N-1,N-1]+aN/bN-0.5)*x
-            l2=D1[N-1,N-1]+aN/bN-0.5
-            lcol1=multiply(l0,D1[K,N-1])+multiply(l1,D0[K,N-1])
-            lcol2=multiply(l0,D2[K,N-1])+2*multiply(l1,D1[K,N-1])+multiply(l2,D0[K,N-1])
-
-            D1t=bmat([rcol1,D1t,lcol1])
-            D2t=bmat([rcol2,D2t,lcol2])
-
-            phim1=(multiply(xkcol0,D1[K,N-1])+multiply(xkcol1,D0[K,N-1]))/2
-            phim2=(multiply(xkcol0,D2[K,N-1])+2*multiply(xkcol1,D1[K,N-1])+multiply(xkcol2,D0[K,N-1]))/2
-            phim=cN*bmat([phim1,phim2])/bN                 # compute phi'_-, phi''_-
-
-            phip1=(multiply(-xkcol0,D1[K,0])-multiply(xkcol1,D0[K,0]))/2
-            phip2=(multiply(-xkcol0,D2[K,0])-2*multiply(xkcol1,D1[K,0])-multiply(xkcol2,D0[K,0]))/2
-            phip=c1*bmat([phip1,phip2])/b1                 # compute phi'_+, phi''_+
-
-            xt=x[K]                                 # node vector
-            
-        return xt,D2t,D1t,phip,phim
 
 
 class postProc():
@@ -1459,6 +1202,14 @@ if __name__ == "__main__":
         else:
             merr('Solver type not recognized.  Must be eigs or ode45.')
     elif p.method == 'FMM':
+        print 'Using FMM method...'
+        f = fmmMethod()
+        if p.solver == 'eigs':
+            print('Solving EIGENVALUE problem...')
+            print('SORRY... NOT IMPLEMENTED JUST YET FOR EIGENVALUE PROBLEM... TRY THE NAIVE METHOD')
+        elif p.solver == 'ode45':
+            print 'Solving TIME-STEPPING (inital value) problem...'
+            n.runSolver()
         if os.path.exists('v.mat'):
             # Variable thrown from octave already exists so go straight to multiplication
             inDict = loadmat('v.mat')
@@ -1468,10 +1219,6 @@ if __name__ == "__main__":
             outDict = {}
             outDict['x'] = x
             savemat('x.mat',outDict)
-        else:
-            # Start a new simulation from scratch
-            print 'Solving TIME-STEPPING (inital value) problem...'
-            print 'Using FMM method...'
     else:
         merr('Method type not recognized.  Must be Naive or FMM')
 

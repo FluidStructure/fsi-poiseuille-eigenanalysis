@@ -60,8 +60,12 @@ for R = Rm;
         A = (D4 - 2*(k^2)*D2 + I*(k^4)).*(mu/(rho)) + (i*k)*diag(d2Udy2)*I - (i*k)*diag(U)*(D2-I*(k^2));
         B = D2 - (k^2)*I;
 
-
-        e = eig(A,B);                                           % Compute eigenvalues
+        % Solve the standard eigenvalue problem (invert RHS first)
+        A = B\A;
+        e = eig(A);
+        % OR: solve the generalized eigenvalue problem
+        %e = eig(A,B);                                           % Compute eigenvalues
+        
         %[V,D] = eig(A,B);
         %e = diag(D);
 
@@ -81,9 +85,9 @@ for R = Rm;
     ind2 = ind2 + 1;
 end
 
-save emat.mat
+save -v7 emat.mat;
 cs=contour(Rm,km,real(emat),[-1:0.01:0]);
-clabel(cs);grid
+clabel(cs);grid;
 xlabel('Re (based on channel half-width)')
 ylabel('Wavenumber (k)')
 title('Marginal Stability Curve for Plane Poiseuille flow')
