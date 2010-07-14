@@ -124,7 +124,7 @@ class geometry():
     
     def makeGeometry(self,p):
 
-        c = chebychev()
+        c = octFuncs.chebychev()
 
         # Get the chebyshev grid points and 1st and 2nd order differentiation matrices over [-1,1]
         bcsy = mat([[0,1,0],[0,1,0]])           # Boundary conditions
@@ -198,7 +198,7 @@ class fmmMethod():
     def multRHSfluid(self,v):
         p = self.parameters
         g = self.geometry
-        f = finiteDifference()
+        f = octFuncs.finiteDifference()
         
         Nn = p.Nco + 1      # The number of nodes in the compliant panel section
         Ny = p.chebN        # The number of vertical fluid elements
@@ -529,6 +529,37 @@ class naiveMethod():
         self.parameters = parameters.simulation()
         self.geometry = geometry()
 
+    def runOdeSolver(self):
+        self.generateInfluenceCoefficients()
+        self.saveVariables()
+        self.generateLHSandRHS()
+        self.makeGeneralized()
+        def tfun(t,y):
+            yd = [0.0]*len(y)
+            for i in range(len(n.RHSGeneral)):
+                r = self.RHSGeneral[i]
+                yd[i] = sum(r*y)
+            return yd
+        # Initialize with a spot disturbance
+        yinit = [0.0]*len(n.RHSGeneral)
+        Ny = self.parameters.chebN
+        Nx = self.parameters.Nx
+        if self.parameters.deterministicBCs == True:
+            Ny = Ny - 2
+        nn = int(round(Nx/4.0)*Ny + round(Ny/2.0))
+        yinit[nn] = 1e-2
+        # Set the timeslots
+        tslot = [0,480]
+        # Call the ode45 solver
+        o = octFuncs.ode()
+        path = 'results/' + str(int(n.parameters.R))
+        if self.parameters.fluidOnly == True:
+            path = path + '/fluidOnly/'
+        else:
+            path = path + '/FSI/'
+        o.outPath = path
+        o.ode45(tfun,tslot,yinit)
+
     def runSolver(self):
         self.generateInfluenceCoefficients()
         self.saveVariables()
@@ -553,7 +584,7 @@ class naiveMethod():
 
         p = self.parameters
         g = self.geometry
-        f = finiteDifference()
+        f = octFuncs.finiteDifference()
     
         Nn = p.Nco + 1
 
@@ -1195,10 +1226,10 @@ if __name__ == "__main__":
         n = naiveMethod()
         if p.solver == 'eigs':
             print 'Solving EIGENVALUE problem...'
-            n.runSolver()
+            n.runEigSolver()
         elif p.solver == 'ode45':
             print 'Solving Intial Value problem (ODE45)...'
-            n.runSolver()
+            n.runOdeSolver()
         else:
             merr('Solver type not recognized.  Must be eigs or ode45.')
     elif p.method == 'FMM':
