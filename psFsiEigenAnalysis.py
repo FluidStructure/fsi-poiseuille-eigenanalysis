@@ -215,6 +215,7 @@ class fmmMethod():
         nn = int(round(Nx/4.0)*Ny + round(Ny/2.0))
         yinit = [0.0]*(Ny*Nx + (p.Nco+1)*2)
         yinit[nn] = 1e-2
+        yinit[nn-1] = 1e-2
         # Set the timeslots
         tslot = [0,480]
         # Call the ode45 solver
@@ -333,12 +334,13 @@ class fmmMethod():
             del d2dx[:2*Ny]
         # Get chebyshev second-order gradients in the y-direction (must add in near-wall vortex strengths)
         vfIncNearWall = []
+        ##vNW = [0.0]*len(g.xcFnw)    # For debugging only
         for i in xrange(p.Nx):
             vfIncNearWall += [vNW[i]]
             vfIncNearWall += vf[i*Ny:(i+1)*Ny]
             vfIncNearWall += [vNW[i+p.Nx]]
         d2dy = self.d2dyCheb(vfIncNearWall,g.d2dy);
-        d2dy = list(d2dy)
+        (d2dynw,d2dy) = self.getNearAndFarWallElements(list(d2dy))
         
         # Put together the RIGHT HAND SIDE of the FLUID PART
         vdot = [0.0]*Nf
@@ -404,7 +406,7 @@ class fmmMethod():
         nc = size(chebMat,0)
         ncols = int(nn/nc)
         R = zeros(nn)
-        for i in range(0,ncols):
+        for i in range(ncols):
             R[(i*nc):(i*nc)+nc] = transpose(chebMat*transpose(mat(v[(i*nc):(i*nc)+nc])))
         return R
 
