@@ -322,9 +322,7 @@ class fmmMethod():
             d2dx = f.d2dx(vf,Ny,p.dx)
         else:
             # Do a cyclic finite difference
-            vfc = vf[Nf-2*Ny:Nf]
-            vfc.reverse()
-            vfc += vf + vf[0:2*Ny]
+            vfc = vf[Nf-2*Ny:Nf] + vf + vf[0:2*Ny]
             #-----------
             d1dx = list(f.d1dx(vfc,Ny,p.dx,order=2))
             d2dx = list(f.d2dx(vfc,Ny,p.dx))
