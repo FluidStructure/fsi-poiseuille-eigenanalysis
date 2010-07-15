@@ -309,10 +309,11 @@ class fmmMethod():
 
         # Get the normal velocity at fluid elements due to wall source and near-wall vortex elements and
         # Add to normal velocity at fluid elements due to themselves (already calculated)
-        vNW = sigma[(Nx*2):(Nx*4)]
+        vNWs = [s*g.dy[0] for s in sigma[(Nx*2):(Nx*4)]]
+        vNW = [s for s in sigma[(Nx*2):(Nx*4)]]
         (Uwf,Vwf) = velocitylib.source_element_vel(g.XLw,list(g.ycW)*Np,sigma[0:2*Nx]*Np,g.XRw,list(g.ycW)*Np,sigma[0:2*Nx]*Np,g.xcFfw,g.ycFfw,threads=p.Nthreads,fmm=True,assume_point_length=32)
         Vf = [Vf[i] + Vwf[i] for i in xrange(len(Vwf))]
-        (Uwf,Vwf) = velocitylib.vortex_element_vel(g.XLnw,g.ycFnw*Np,vNW*Np,g.XRnw,g.ycFnw*Np,vNW*Np,g.xcFfw,g.ycFfw,threads=p.Nthreads,fmm=True,assume_point_length=32)
+        (Uwf,Vwf) = velocitylib.vortex_element_vel(g.XLnw,g.ycFnw*Np,vNWs*Np,g.XRnw,g.ycFnw*Np,vNWs*Np,g.xcFfw,g.ycFfw,threads=p.Nthreads,fmm=True,assume_point_length=32)
         Vf = [Vf[i] + Vwf[i] for i in xrange(len(Vwf))]
         
         # Calculate convective components (finite difference) for RHS of fluid transport
@@ -322,14 +323,14 @@ class fmmMethod():
             d2dx = f.d2dx(vf,Ny,p.dx)
         else:
             # Do a cyclic finite difference
-            vfc = vf[Nf-2*Ny:Nf] + vf + vf[0:2*Ny]
+            vfc = vf[-2*Ny:] + vf + vf[:2*Ny]
             #-----------
             d1dx = list(f.d1dx(vfc,Ny,p.dx,order=2))
             d2dx = list(f.d2dx(vfc,Ny,p.dx))
-            del d1dx[Nf-2*Ny:Nf]
-            del d2dx[Nf-2*Ny:Nf]
-            del d1dx[0:2*Ny]
-            del d2dx[0:2*Ny]
+            del d1dx[-2*Ny:]
+            del d2dx[-2*Ny:]
+            del d1dx[:2*Ny]
+            del d2dx[:2*Ny]
         # Get chebyshev second-order gradients in the y-direction (must add in near-wall vortex strengths)
         vfIncNearWall = []
         for i in xrange(p.Nx):
@@ -345,8 +346,9 @@ class fmmMethod():
             # Get local mean flow
             U = -1.0*(1 - (g.ycFfw[i]**2.0))
             # Get vdot
-            vdot[i] = U*d1dx[i] + p.nu*(d2dx[i] + d2dy[i])
-            #vdot[i] = Vf[i]*2.0 + U*d1dx[i] + p.nu*(d2dx[i] + d2dy[i])
+            #vdot[i] = U*d1dx[i]
+            #vdot[i] = U*d1dx[i] + p.nu*(d2dx[i] + d2dy[i])
+            vdot[i] = Vf[i]*2.0 + U*d1dx[i] + p.nu*(d2dx[i] + d2dy[i])
         
         # Add the wall terms
         vdot += [0.0]*len(vw)

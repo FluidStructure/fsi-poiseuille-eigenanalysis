@@ -15,6 +15,6 @@ True            # Deterministic boundary conditions
 True            # Periodic boundary conditions (left-inflow = right-outflow)
 20              # Number of virtual domains either side (for periodic BCs only)
 FMM             # 'Naive' or 'FMM' - which solution methodology to use
-6               # Number of threads for FMM to operate over
+2               # Number of threads for FMM to operate over
 octave-3.2.3    # Octave version to use (for eigs and ode commands)
 ode45           # 'eigs' or 'ode45' - which solver to use
