@@ -345,8 +345,8 @@ class fmmMethod():
             # Get local mean flow
             U = -1.0*(1 - (g.ycFfw[i]**2.0))
             # Get vdot
-            #vdot[i] = U*d1dx[i]
-            vdot[i] = Vf[i]*2.0 + U*d1dx[i] + p.nu*(d2dx[i] + d2dy[i])
+            vdot[i] = U*d1dx[i] + p.nu*(d2dx[i] + d2dy[i])
+            #vdot[i] = Vf[i]*2.0 + U*d1dx[i] + p.nu*(d2dx[i] + d2dy[i])
         
         # Add the wall terms
         vdot += [0.0]*len(vw)
@@ -379,156 +379,6 @@ class fmmMethod():
                 xr.append( xc+(dx/2.0)+(L*(i-N)) )
         return xl, xr
 
-    def runFMM(vv,sigma):
-        # Read in parameters for the system
-        (nu,dx,Nx,Nup,Nco,Ndn,chebN,d2dy,xw,yw,pcxx,pcyy,B,K,d,rhow,hw,dy) = getParams()
-
-        def multRHS(x):
-            if iscomplexobj(x) == False:
-                #print 'x is only REAL!'
-                #print 'CALCULATING RHS*x!'
-                RHSf = RHSfluid(x,nu,dx,Nx,Nup,Nco,Ndn,chebN,d2dy,xw,yw,pcxx,pcyy,dy)
-            else:
-                #print 'x is COMPLEX!'
-                #print 'CALCULATING RHS*real(x)!'
-                RHSfr = RHSfluid(real(x),nu,dx,Nx,Nup,Nco,Ndn,chebN,d2dy,xw,yw,pcxx,pcyy,dy)
-                #print 'CALCULATING RHS*imag(x)!'
-                RHSfc = RHSfluid(imag(x),nu,dx,Nx,Nup,Nco,Ndn,chebN,d2dy,xw,yw,pcxx,pcyy,dy)
-                RHSf = RHSfr + RHSfc
-            return RHSf
-        RHS = LinearOperator( (Nx*(chebN-2),Nx*(chebN-2)), matvec=multRHS, dtype='float64' )
-        # Calculate the RHS*x of the fluid equations
-        # Same as: (RHSf,uSlip) = RHSfluid(vv,nu,dx,Nx,Nup,Nco,Ndn,chebN,d2dy,xw,yw,pcxx,pcyy,dy)
-
-        if sigma == 0.0:
-            xoutRe = RHS.matvec( vv )
-            xoutIm = 0*xoutRe
-        else:
-            # OR, RHS\x (when sigma is specified ~= 0.0 or sigma = 'SM'):
-            #(xout,F) = gmres(RHS, vv, tol=1.0000000000000001e-02, restrt=50, maxiter=100)
-            #(xout,F) = cgs(RHS, vv, tol=1.0000000000000001e-02, maxiter=100)    
-            print 'sigma = ', sigma
-            F = 1;
-            Ny = chebN-2;
-            #pdb.set_trace()
-            v = append(real(vv),imag(vv))
-            
-            def preCondRHS(xx):
-                xo = xx
-                return xo
-            pCondRHS = LinearOperator( (2*Nx*Ny,2*Nx*Ny), matvec=preCondRHS, dtype='float64' )
-            def multRHScomplex(xi):
-                #pdb.set_trace()
-                xiR = xi[0:Nx*Ny];
-                xiC = xi[Nx*Ny:2*Nx*Ny]
-                xoR = (multRHS(xiR) + real(-1*sigma)*xiR) - imag(-1*sigma)*xiC
-                xoC = imag(-1*sigma)*xiR + (multRHS(xiC) + real(-1*sigma)*xiC)
-                xo = append(xoR,xoC)
-                return xo
-            RHScomp = LinearOperator( (2*Nx*Ny,2*Nx*Ny), matvec=multRHScomplex, dtype='float64' )
-            #(xout,F) = minres(RHScomp, v, M=None, tol=1.0e-6, maxiter=1000,shift=complex(real(sigma),imag(sigma))) 
-            (xo,F) = minres(RHScomp, v, M=pCondRHS, tol=1.0e-3, maxiter=1000)
-            xoutRe = xo[0:Nx*Ny]
-            xoutIm = xo[Nx*Ny:2*Nx*Ny] 
-            if F == 0:
-                print 'SUCESSFULLY COMPLETED RHScomplex\X!'
-            else:
-                pdb.set_trace()
-
-        # Calculate the RHS of the wall equations
-        # RHSw = RHSwall(vv,nu,dx,Nx,Nup,Nco,Ndn,chebN,d2dy,xw,yw,pcxx,pcyy,B,K,d,rhow,hw)
-        
-        # Combine the RHSwall and RHSfluid results
-        # RHS = append(RHSf,RHSw)
-        
-        # Get the inv(LHS)*(RHS*x)
-        # x = invLHS(RHS,nu,dx,Nx,Nup,Nco,Ndn,chebN,d2dy,xw,yw,pcxx,pcyy,rhow,hw)
-        
-        return xoutRe,xoutIm,pcyy[0:chebN-2]
-
-    def invLHS(RHS,nu,dx,Nx,Nup,Nco,Ndn,chebN,d2dy,xw,yw,pcxx,pcyy,rhow,hw):
-
-        def dummyLHS(vl):
-            print 'Inside dummyLHS...'
-            X = vl
-            for i in range(Nx*chebN+(Nco-1),Nx*chebN+2*(Nco-1)):
-                X[i] = X[i]*5.0
-            return X
-
-        def multLHS(vl):
-            #pdb.set_trace()
-            # Evaluating the matrix-vector product with the LHS matrix of wall and fluid equations with input (x)
-            print 'Evaluating matrix-vector product: LHS*vf...'
-
-            # Deconstruct the input vector to fluid elements, wall position and wall acceleration
-            (vff,vwp,vwv) = deconstV(vl,chebN,Nx,Nco)
-
-            # Get the velocity of each wall panel
-            wpv = panelVels(vwv,Nup,Nco,Ndn)
-
-            # Solve the velocity flux through wall elements due to fluid elements
-            (fwu,fwv) = velocitylib.vortex_element_vel(pcxx-(dx/2),pcyy,vff,pcxx+(dx/2),pcyy,vff,xw,yw)
-            
-            # Solve the wall element strengths
-            def multINww(x):
-                # Evaulate the matrix-vector product of wall-normal influence coefficients using Jarrads FMM
-                print 'Evaluating matrix-vector product: INww*Gamma...'
-                (u,v) = velocitylib.source_element_vel(xw-(dx/2),yw,x,xw+(dx/2),yw,x,xw,yw)
-                return v
-            INww = LinearOperator( (Nx*2,Nx*2), matvec=multINww, dtype='float64' )
-            (sigma1,Fi) = minres(INww,wpv)
-            if Fi == 0:
-                print 'Sucessfully completed inv(INww)*wpv'
-            (sigma2,Fi) = minres(INww,fwv)
-            if Fi == 0:
-                print 'Sucessfully completed inv(INww)*fwv'
-            sigma = sigma1 + sigma2
-            
-            # Evaluate the perturbation at all wall elements due to wall elements
-            (wwu,wwv) = velocitylib.source_element_vel(xw-(dx/2),yw,sigma,xw+(dx/2),yw,sigma,xw,yw)
-            
-            # Get total slip velocity at the wall
-            us = array(wwu) + array(fwu)
-            
-            # Initialize the return vector
-            nn = chebN*Nx
-            #R = array([0.0]*size(vv))      # For debugging.  Really R = vv (initialise with ones on diagonal)
-            R = vl
-            
-            # Apply vorticity injection terms
-            if False:
-                for i in range(0,Nx):
-                    R[i*chebN + 0] = R[i*chebN + 0] - us[i]
-                    R[i*chebN + chebN-1] = R[i*chebN + chebN-1] + us[i+Nx]
-            
-            # Add pressure integrals from leading edge (to compliant panels)
-            if True:
-                pn = array([0.0]*2)
-                pav = (pn[0] + pn[1])/2
-                co = (Nco-1)-1
-                for i in range(Nx,Nx+Nup+Nco):
-                    pn[0] = pn[1]
-                    pn[1] = pn[0] + us[i]*dx                  # Integrate the pressure across nodes
-                    if i >= Nx+Nup:
-                        pav = (pn[0] + pn[1])/2               # Average pressure across panel
-                        R[Nx*chebN+co] = R[Nx*chebN+co] + (pav*dx)/(rhow*hw)
-                        co = co + 1
-            
-            # pdb.set_trace()
-            return R
-        
-        #  Evaluate 'x' = inv(LHS)*(RHS*v)
-        #pdb.set_trace()
-        nn = size(RHS)
-        LHS = LinearOperator( (nn,nn), matvec=multLHS, dtype='float64' )
-        #LHS = LinearOperator ( (nn,nn), matvec=dummyLHS, dtype='float64' )
-        (X,F) = minres(LHS,RHS,x0=RHS)
-        #pdb.set_trace()
-        if F == 0:
-            print 'Sucessfully completed inv(LHS)*RHS'
-        
-        return X
-
     def RHSwall(vv,nu,dx,Nx,Nup,Nco,Ndn,chebN,d2dy,xw,yw,pcxx,pcyy,B,K,d,rhow,hw):
         # Deconstruct the input vector to fluid elements, wall position and wall acceleration
         (vff,vwp,vwv) = deconstV(vv,chebN,Nx,Nco)
@@ -546,100 +396,6 @@ class fmmMethod():
         RHSw = append(RHSw,RHSw2)
         return RHSw
 
-    def RHSfluid(vv,nu,dx,Nx,Nup,Nco,Ndn,chebN,d2dy,xw,yw,pcxx,pcyy,dy):
-        
-        Nthreads = 2
-        fmmOn = True
-        
-        # Get the position of wall-vorticies (the vortex elements closest to the wall)
-        xwv = xw
-        ywv = (-1.0*yw*(dy[0]/2.0)) + yw
-        
-        # Deconstruct the input vector to fluid elements, wall position and wall acceleration
-        Ny = chebN - 2;dyf = dy[1:(size(dy)-1)]
-        vff = array([0.0]*size(vv))
-        for i in range(0,Nx):
-            vff[i*Ny:(i+1)*Ny] = vv[i*Ny:(i+1)*Ny]*array(dyf)
-
-        # Solve the velocity flux through all elements due to fluid elements (except near-wall fluid elements)
-        (fau,fav) = velocitylib.vortex_element_vel(pcxx-(dx/2),pcyy,vff,pcxx+(dx/2),pcyy,vff,append(pcxx,xw),append(pcyy,yw),threads=Nthreads,fmm=fmmOn)
-        ffv = fav[0:(Ny*Nx)]
-        fwv = fav[(Ny*Nx):(Ny*Nx + Nx*2)]
-        fwu = fau[(Ny*Nx):(Ny*Nx + Nx*2)]
-
-        # Solve the wall element (source and nearest vorticity) strengths (using a pre-conditioner)
-        def preCond(xx):
-            xo = xx
-            xo[0*Nx:1*Nx] = (xo[0*Nx:1*Nx])*-2.0                # Upper source elements
-            xo[1*Nx:2*Nx] = (xo[1*Nx:2*Nx])*2.0                 # Lower source elements
-            xo[2*Nx:3*Nx] = (xo[2*Nx:3*Nx])*-2.0*(1/dy[0])      # Upper vortex elements
-            xo[3*Nx:4*Nx] = (xo[3*Nx:4*Nx])*2.0*(1/dy[0])       # Lower vortex elements
-            return xo
-        def multINTww(xx):
-            # Evaulate the matrix-vector product of source/sink influence coefficients using Jarrads FMM
-            #print 'Evaluating matrix-vector product: INTww*X...'
-            ss = xx[0:(Nx*2)]
-            (us,vs) = velocitylib.source_element_vel(xw-(dx/2),yw,ss,xw+(dx/2),yw,ss,xw,yw,threads=Nthreads,fmm=fmmOn)
-            # Adjust the upper panels to have a self-influence of -0.5
-            # pdb.set_trace()
-            #vs[0:Nx] = subtract(vs[0:Nx],ss[0:Nx])
-            for i in range(0,Nx):
-                vs[i] = vs[i] - ss[i]
-            
-            # Evaluate the matrix-vector product of wall-vortex influence coefficients
-            sv = xx[(Nx*2):(Nx*4)]*dy[0]
-            (uv,vv) = velocitylib.vortex_element_vel(xwv-(dx/2),ywv,sv,xwv+(dx/2),ywv,sv,xw,yw,threads=Nthreads,fmm=fmmOn)
-            # Construct the output vector
-            ov = append(add(vs,vv),add(us,uv))
-            return ov
-        INTww = LinearOperator( (Nx*2*2,Nx*2*2), matvec=multINTww, dtype='float64' )
-        pCond = LinearOperator( (Nx*2*2,Nx*2*2), matvec=preCond, dtype='float64' )
-        RHSw = append(multiply(fwv,-1.0),multiply(fwu,-1.0))
-        (sigma,F) = minres(INTww,transpose(mat(RHSw)),M=pCond)
-        if F != 0:
-            pdb.set_trace()
-            #print 'Sucessfully completed inv(INTww)*[fwv;fwu]'
-        # pdb.set_trace()       # To test result try: INww.matvec(sigma) + fwv
-
-        # Evaluate the perturbation velocity in all elements from the wall sources and vortices
-        ss = sigma[0*Nx:2*Nx]
-        sv = sigma[2*Nx:4*Nx]*dy[0]
-        (sau,sav) = velocitylib.source_element_vel(xw-(dx/2),yw,ss,xw+(dx/2),yw,ss,append(pcxx,xw),append(pcyy,yw),threads=Nthreads,fmm=fmmOn)
-        (vau,vav) = velocitylib.vortex_element_vel(xwv-(dx/2),ywv,sv,xwv+(dx/2),ywv,sv,append(pcxx,xw),append(pcyy,yw),threads=Nthreads,fmm=fmmOn)
-        wfv = array(sav[0:(Ny*Nx)]) + array(vav[0:(Ny*Nx)])
-
-        # Get the mean velocity profile and gradients
-        # Plane Pousille flow
-        U = (1 - pcyy**2)
-        d2Udy2 = -2.0        # This is actually the gradient (in y-direction) of VORTICITY - don't be fooled by variable name
-
-        # Get the vorticity-gradient multiplied with the y-direction perturbation velocity
-        vpdody = (wfv + array(ffv))*d2Udy2
-        
-        # Get the mean velocity (1m/s in this case) multiplied with the x-direction gradient of the perturbation vorticity
-        Udodx = U*array(d1dx(vv,Ny,dx,2))
-
-        # Constuct a new vector of fluid element strengths that includes the near-wall fluid elements (determined)
-        sv = sigma[2*Nx:4*Nx]
-        vvw = [0.0]*chebN*Nx
-        for i in range(0,Nx):
-            vvw[i*chebN:(i+1)*chebN] = append(append(array(sv[i]),vv[i*Ny:(i+1)*Ny]),array(sv[i+Nx]))
-
-        # Get the second derivatives in x and y direction multiplied by kinematic viscosity
-        d2odyw = d2dyCheb(vvw,d2dy)
-        d2odx = d2dx(vv,Ny,dx)
-
-        # Extract relevant parts of d2odyw
-        d2ody = [0.0]*Ny*Nx
-        for i in range(0,Nx):
-            d2ody[i*Ny:(i+1)*Ny] = d2odyw[(i*chebN + 1):((i+1)*chebN - 1)]
-        
-        # Evaluate the RHS of the fluid equation
-        RHSf = nu*(array(d2ody) + array(d2odx)) - (vpdody + array(Udodx))
-        #RHSf = nu*(array(d2ody) + array(d2odx))
-        
-        return RHSf
-
     def d2dyCheb(self,v,chebMat):
         # Calculate the gradients in "v" using chebyChev differentiation matrix
         nn = size(v)
@@ -649,22 +405,6 @@ class fmmMethod():
         for i in range(0,ncols):
             R[(i*nc):(i*nc)+nc] = transpose(chebMat*transpose(mat(v[(i*nc):(i*nc)+nc])))
         return R
-
-    def deconstV(vv,chebN,Nx,Nco):
-        vff = vv[0:(chebN*Nx)]
-        vwp = vv[(chebN*Nx):(chebN*Nx+Nco-1)]
-        vwv = vv[(chebN*Nx+Nco-1):(chebN*Nx+2*Nco-2)]
-        return vff,vwp,vwv
-
-    def panelVels(vwv,Nup,Nco,Ndn):
-        Nx = Nup+Nco+Ndn
-        wpv = [0.0]*Nx                                              # Upper wall panels
-        wpv = append(wpv,[0.0]*Nup)                                 # Panels upstream of the compliant section
-        ve = append(append(0.0,vwv),0.0)
-        wpv = append(wpv,(ve[0:(size(ve)-1)] + ve[1:size(ve)])/2)   # Compliant wall section
-        wpv = append(wpv,[0.0]*Ndn)                                 # Panels downstream of compliant section
-        return wpv
-
 
 class naiveMethod():
 
