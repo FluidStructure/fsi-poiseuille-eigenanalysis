@@ -1,11 +1,12 @@
 from scipy import reshape, real, imag, array, exp, pi, linspace, divide, multiply
 from scipy import append, size, concatenate, dot, eye, mod, linalg, sum, column_stack
 from scipy.io import savemat, loadmat
+from scipy.sparse.linalg import gmres, minres, LinearOperator
 import matplotlib.pyplot as plt
 from matplotlib.image import NonUniformImage
 from matplotlib.pyplot import imshow, axis, contour, contourf
 from numpy import mat, reshape, linspace, reshape, append, random, ones, delete
-from numpy import meshgrid, bmat, array, size, zeros, transpose, cumsum
+from numpy import meshgrid, bmat, array, size, zeros, transpose, cumsum, add
 import numpy as np
 import os, sys, subprocess
 
@@ -71,9 +72,11 @@ class parameters():
             self.allowSlip = self.parseBoolString(p[12])
             self.deterministicBCs = self.parseBoolString(p[13])
             self.periodicBCs = self.parseBoolString(p[14])
-            self.method = p[15]
-            self.octave = p[16]
-            self.solver = p[17]
+            self.Ndomains = int(p[15])
+            self.method = p[16]
+            self.Nthreads = int(p[17])
+            self.octave = p[18]
+            self.solver = p[19]
             
             # Some calculated fixed variables for the simulation
             self.Nx = self.Nup+self.Nco+self.Ndn                # Total number of panels along the length of the domain
@@ -176,16 +179,53 @@ class fmmMethod():
     def __init__(self):
         self.parameters = parameters.simulation()
         self.geometry = geometry()
-
-    def runSolver(self):
+        #------------------
+        # Get some critical geometry that is used often
+        g = self.geometry
         p = self.parameters
-        if p.solver == "ODE45":
-            self.setInitialConditions()
-            ode = octFuncs.ode()
-            ode.ode45(self.RHS,tslot,s.yo)
-        elif p.solver == "EIGS":
-            print("Sorry not yet implemented")
-            #self.callOctave()
+        self.xo = [0.0]*(p.Nx*4)
+        # Get near-wall fluid element geometry
+        (g.xcFnw,g.xcFfw) = self.getNearAndFarWallElements(g.xcF)
+        (g.ycFnw,g.ycFfw) = self.getNearAndFarWallElements(g.ycF)
+        # Generate periodic elements
+        (g.XLfw,g.XRfw) = self.genPeriodicElements(g.xcFfw)
+        (g.XLnw,g.XRnw) = self.genPeriodicElements(g.xcFnw)
+        (g.XLw,g.XRw) = self.genPeriodicElements(g.xcW)
+
+    def getNearAndFarWallElements(self,x):
+        p = self.parameters
+        xnw = [x[i*p.chebN] for i in xrange(p.Nx)] + [x[(i+1)*(p.chebN-1)] for i in xrange(p.Nx)]
+        xfw = []
+        for i in xrange(p.Nx):
+            xfw += list(x[(i*p.chebN + 1):((i+1)*p.chebN - 1)])
+        return xnw, xfw
+
+    def runOdeSolver(self):
+        p = self.parameters
+        g = self.geometry
+
+        def tfun(t,y):
+            yd = self.multRHSfluid(y)
+            return yd
+        # Initialize with a spot disturbance
+        Ny = p.chebN
+        Nx = p.Nx
+        if p.deterministicBCs == True:
+            Ny = Ny - 2
+        nn = int(round(Nx/4.0)*Ny + round(Ny/2.0))
+        yinit = [0.0]*(Ny*Nx + (p.Nco+1)*2)
+        yinit[nn] = 1e-2
+        # Set the timeslots
+        tslot = [0,480]
+        # Call the ode45 solver
+        o = octFuncs.ode()
+        path = 'results/' + str(int(p.R))
+        if p.fluidOnly == True:
+            path = path + '/fluidOnly/'
+        else:
+            path = path + '/FSI/'
+        o.outPath = path
+        o.ode45(tfun,tslot,yinit)
 
     def callOctave(self):
         # Save generalised matrix to A.mat
@@ -194,34 +234,125 @@ class fmmMethod():
         savemat('A.mat',outDict)
         # Run octave script from command line
         os.system(self.parameters.octave + ' --eval callOctaveSolvers.m')
-    
+
+    def getFlowAndWallParts(self,v,Nf,Nn):
+        vf = v[0:Nf]
+        vw = v[Nf:Nf+2*Nn]
+        return vf,vw
+        
     def multRHSfluid(self,v):
         p = self.parameters
         g = self.geometry
         f = octFuncs.finiteDifference()
         
-        Nn = p.Nco + 1      # The number of nodes in the compliant panel section
-        Ny = p.chebN        # The number of vertical fluid elements
+        Nn = p.Nco + 1          # The number of nodes in the compliant panel section
+        if p.deterministicBCs == True:
+            Ny = p.chebN - 2        # The number of vertical fluid elements
+        else:
+            merr('SORRY!  Can only use deterministic boundary conditions in FMM method for now')
         
-        # Multiply flow element strengths "v" by element height
+        # Get fluid and wall components of input vector "v"
+        Nx = p.Nx
+        Nf = Ny*p.Nx
+        (vf,vw) = self.getFlowAndWallParts(v,Nf,Nn)
         
-        # Get the wall panel vertical velocities (in the compliant section)
-        # Get the normal and tangential velocities at the wall and fluid elements due to fluid elements
+        # Multiply flow element strengths "v" by element height to get singularity strengths
+        dy = g.dy[1:p.chebN-1]
+        vfs = [dy[mod(i,Ny)]*vf[i] for i in xrange(Nf)]
+        
+        # Solve the velocity at all elements due to fluid elements (excluding nearest-to-wall fluid elements)
+        Np = len(g.XLfw)/len(g.xcFfw)
+        (Ufa,Vfa) = velocitylib.vortex_element_vel(g.XLfw,g.ycFfw*Np,vfs*Np,g.XRfw,g.ycFfw*Np,vfs*Np,(g.xcFfw+list(g.xcW)),(g.ycFfw+list(g.ycW)),threads=p.Nthreads,fmm=True,assume_point_length=32)
+        Uf = Ufa[:Nf];Ufw = Ufa[Nf:]
+        Vf = Vfa[:Nf];Vfw = Vfa[Nf:]
+       
+        # Get the total normal flux through wall elements
+        Vw = Vfw
+        for c in range(p.Nco):
+            i = p.Nx+p.Nup+c
+            Vw[i] -= (vw[c] + vw[c+1])/2.0
+
         # Solve for wall source strengths and nearest-to-wall flow element strengths together
-        
-        # Get the normal velocity at fluid elements due to wall elements
+        def preCond(xx):
+            xo = xx
+            xo[0*Nx:1*Nx] = (xo[0*Nx:1*Nx])*-2.0                # Upper source elements
+            xo[1*Nx:2*Nx] = (xo[1*Nx:2*Nx])*2.0                 # Lower source elements
+            xo[2*Nx:3*Nx] = (xo[2*Nx:3*Nx])*-2.0*(1/dy[0])      # Upper vortex elements
+            xo[3*Nx:4*Nx] = (xo[3*Nx:4*Nx])*2.0*(1/dy[0])       # Lower vortex elements
+            return xo
+        def multINTww(xx):
+            Np = len(g.XLnw)/len(g.ycFnw)   # Number of periodic domains (for copying y-coordinates)
+            
+            # Evaulate the matrix-vector product of source/sink influence coefficients using Jarrads FMM
+            print('Evaluating matrix-vector product: INTww*X...')
+            ss = [x for x in xx[0:(Nx*2)]]
+            (us,vs) = velocitylib.source_element_vel(g.XLw,list(g.ycW)*Np,ss*Np,g.XRw,list(g.ycW)*Np,ss*Np,list(g.xcW),list(g.ycW),threads=p.Nthreads,fmm=True,assume_point_length=32)
+            # Adjust the upper panels to have a self-influence of -0.5
+            for i in range(0,Nx):
+                vs[i] = vs[i] - ss[i]
+            
+            # Evaluate the matrix-vector product of wall-vortex influence coefficients
+            sv = [x*g.dy[0] for x in xx[(Nx*2):(Nx*4)]]
+            (uv,vv) = velocitylib.vortex_element_vel(g.XLnw,g.ycFnw*Np,sv*Np,g.XRnw,g.ycFnw*Np,sv*Np,list(g.xcW),list(g.ycW),threads=p.Nthreads,fmm=True,assume_point_length=32)
+            # Construct the output vector
+            ov = [vs[i] + vv[i] for i in xrange(len(vv))] + [us[i] + uv[i] for i in xrange(len(uv))]
+            return ov
+        INTww = LinearOperator( (Nx*2*2,Nx*2*2), matvec=multINTww, dtype='float64' )
+        pCond = LinearOperator( (Nx*2*2,Nx*2*2), matvec=preCond, dtype='float64' )
+        RHSw = append(multiply(Vw,-1.0),multiply(Ufw,-1.0))
+        (sigma,F) = minres(INTww,transpose(mat(RHSw)),M=pCond,tol=1e-5,x0=self.xo)
+        sigma = list(sigma)
+        self.xo = sigma     # Update the initial guess
+        #(sigma,F) = gmres(INTww,transpose(mat(RHSw)),tol=1e-3)
+        if F != 0:
+            pdb.set_trace()
+
+        # Get the normal velocity at fluid elements due to wall source and near-wall vortex elements and
         # Add to normal velocity at fluid elements due to themselves (already calculated)
+        vNW = sigma[(Nx*2):(Nx*4)]
+        (Uwf,Vwf) = velocitylib.source_element_vel(g.XLw,list(g.ycW)*Np,sigma[0:2*Nx]*Np,g.XRw,list(g.ycW)*Np,sigma[0:2*Nx]*Np,g.xcFfw,g.ycFfw,threads=p.Nthreads,fmm=True,assume_point_length=32)
+        Vf = [Vf[i] + Vwf[i] for i in xrange(len(Vwf))]
+        (Uwf,Vwf) = velocitylib.vortex_element_vel(g.XLnw,g.ycFnw*Np,vNW*Np,g.XRnw,g.ycFnw*Np,vNW*Np,g.xcFfw,g.ycFfw,threads=p.Nthreads,fmm=True,assume_point_length=32)
+        Vf = [Vf[i] + Vwf[i] for i in xrange(len(Vwf))]
         
         # Calculate convective components (finite difference) for RHS of fluid transport
         if p.periodicBCs == 'False':
-            print('fds')
             # Just do a normal finite diference
+            d1dx = f.d1dx(vf,Ny,p.dx,order=2)
+            d2dx = f.d2dx(vf,Ny,p.dx)
         else:
-            print('fds')
             # Do a cyclic finite difference
-        # Multiply gradients calculated by the local mean velocity
+            vfc = vf[Nf-2*Ny:Nf]
+            vfc.reverse()
+            vfc += vf + vf[0:2*Ny]
+            #-----------
+            d1dx = list(f.d1dx(vfc,Ny,p.dx,order=2))
+            d2dx = list(f.d2dx(vfc,Ny,p.dx))
+            del d1dx[Nf-2*Ny:Nf]
+            del d2dx[Nf-2*Ny:Nf]
+            del d1dx[0:2*Ny]
+            del d2dx[0:2*Ny]
+        # Get chebyshev second-order gradients in the y-direction (must add in near-wall vortex strengths)
+        vfIncNearWall = []
+        for i in xrange(p.Nx):
+            vfIncNearWall += [vNW[i]]
+            vfIncNearWall += vf[i*Ny:(i+1)*Ny]
+            vfIncNearWall += [vNW[i+p.Nx]]
+        d2dy = self.d2dyCheb(vfIncNearWall,g.d2dy);
+        d2dy = list(d2dy)
         
-        # Calculate second-derivatives for diffusive terms
+        # Put together the RIGHT HAND SIDE of the FLUID PART
+        vdot = [0.0]*Nf
+        for i in xrange(Nf):
+            # Get local mean flow
+            U = -1.0*(1 - (g.ycFfw[i]**2.0))
+            # Get vdot
+            #vdot[i] = U*d1dx[i]
+            vdot[i] = Vf[i]*2.0 + U*d1dx[i] + p.nu*(d2dx[i] + d2dy[i])
+        
+        # Add the wall terms
+        vdot += [0.0]*len(vw)
+        
         return vdot
         
     def multRHSwall(self,v):
@@ -233,8 +364,22 @@ class fmmMethod():
         # Divide by (p.rhow*p.hw)
         return vdot
         
-
-        
+    def genPeriodicElements(self,x):
+        p = self.parameters
+        dx = p.dx
+        L = p.LT
+        if p.periodicBCs == True:
+            N = p.Ndomains      # Number of periodic elements either side of current element
+        else:
+            N = 0
+        n = (2*N) + 1
+        xl = []
+        xr = []
+        for i in xrange(n):
+            for xc in x:
+                xl.append( xc-(dx/2.0)+(L*(i-N)) )
+                xr.append( xc+(dx/2.0)+(L*(i-N)) )
+        return xl, xr
 
     def runFMM(vv,sigma):
         # Read in parameters for the system
@@ -497,7 +642,7 @@ class fmmMethod():
         
         return RHSf
 
-    def d2dyCheb(v,chebMat):
+    def d2dyCheb(self,v,chebMat):
         # Calculate the gradients in "v" using chebyChev differentiation matrix
         nn = size(v)
         nc = size(chebMat,0)
@@ -552,7 +697,7 @@ class naiveMethod():
         tslot = [0,480]
         # Call the ode45 solver
         o = octFuncs.ode()
-        path = 'results/' + str(int(n.parameters.R))
+        path = 'results/' + str(int(self.parameters.R))
         if self.parameters.fluidOnly == True:
             path = path + '/fluidOnly/'
         else:
@@ -846,7 +991,7 @@ class naiveMethod():
                 x = g.xcF[i]
                 y = g.ycF[i]
                 (xl,xr) = self.genPeriodicElements(x,y)
-                (U,V) = velocitylib.vortex_element_vel(xl,[y]*len(xl),[1.0]*len(xl),xr,[y]*len(xr),[1.0]*len(xr),X,Y)
+                (U,V) = velocitylib.vortex_element_vel(xl,[y]*len(xl),[1.0]*len(xl),xr,[y]*len(xr),[1.0]*len(xr),X,Y,threads=p.Nthreads,fmm=True,assume_point_length=32)
                 self.ICs['INff'][:,i] = V[0:Nf]
                 self.ICs['ITff'][:,i] = U[0:Nf]
                 self.ICs['INfw'][:,i] = V[Nf:Nf+(2*Nw)]
@@ -862,7 +1007,7 @@ class naiveMethod():
                 x = g.xcW[i]
                 y = g.ycW[i]
                 (xl,xr) = self.genPeriodicElements(x,y)
-                (U,V) = velocitylib.source_element_vel(xl,[y]*len(xl),[1.0]*len(xl),xr,[y]*len(xr),[1.0]*len(xr),X,Y)
+                (U,V) = velocitylib.source_element_vel(xl,[y]*len(xl),[1.0]*len(xl),xr,[y]*len(xr),[1.0]*len(xr),X,Y,threads=p.Nthreads,fmm=True,assume_point_length=32)
                 self.ICs['INwf'][:,i] = V[0:Nf]
                 self.ICs['ITwf'][:,i] = U[0:Nf]
                 self.ICs['INww'][:,i] = V[Nf:Nf+(2*Nw)]
@@ -1240,16 +1385,16 @@ if __name__ == "__main__":
             print('SORRY... NOT IMPLEMENTED JUST YET FOR EIGENVALUE PROBLEM... TRY THE NAIVE METHOD')
         elif p.solver == 'ode45':
             print 'Solving TIME-STEPPING (inital value) problem...'
-            n.runSolver()
-        if os.path.exists('v.mat'):
-            # Variable thrown from octave already exists so go straight to multiplication
-            inDict = loadmat('v.mat')
-            v = inDict['v']
-            n = fmmMethod()
-            x = n.RHSfluid(v)
-            outDict = {}
-            outDict['x'] = x
-            savemat('x.mat',outDict)
+            f.runOdeSolver()
+##        if os.path.exists('v.mat'):
+##            # Variable thrown from octave already exists so go straight to multiplication
+##            inDict = loadmat('v.mat')
+##            v = inDict['v']
+##            n = fmmMethod()
+##            x = n.RHSfluid(v)
+##            outDict = {}
+##            outDict['x'] = x
+##            savemat('x.mat',outDict)
     else:
         merr('Method type not recognized.  Must be Naive or FMM')
 
