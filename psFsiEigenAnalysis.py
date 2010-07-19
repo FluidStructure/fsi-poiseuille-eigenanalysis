@@ -230,7 +230,7 @@ class fmmMethod():
             return yd
 
         RHS = LinearOperator( (N,N), matvec=tfun, dtype='float64' )
-        (e,v) = eigen(RHS, k=6, M=None, sigma=None, which='LR', v0=None, ncv=None, maxiter=1000, tol=1e-3, return_eigenvectors=True)
+        (e,v) = eigen(RHS, k=6, M=None, sigma=None, which='LR', v0=None, ncv=None, maxiter=4000, tol=1e-3, return_eigenvectors=True)
 
     def runOdeSolver(self):
         p = self.parameters
