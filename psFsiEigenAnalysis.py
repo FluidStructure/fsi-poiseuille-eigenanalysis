@@ -1,7 +1,8 @@
-from scipy import reshape, real, imag, array, exp, pi, linspace, divide, multiply
+from scipy import reshape, real, imag, array, exp, pi, linspace, divide, multiply, iscomplexobj
 from scipy import append, size, concatenate, dot, eye, mod, linalg, sum, column_stack
 from scipy.io import savemat, loadmat
 from scipy.sparse.linalg import gmres, minres, LinearOperator
+from scipy.sparse.linalg.eigen.arpack import eigen
 import matplotlib.pyplot as plt
 from matplotlib.image import NonUniformImage
 from matplotlib.pyplot import imshow, axis, contour, contourf
@@ -11,6 +12,7 @@ import numpy as np
 import os, sys, subprocess
 
 import pdb
+import cProfile, pstats
 
 import sys
 sys.path.append('../python_tools.git/')
@@ -184,6 +186,7 @@ class fmmMethod():
         g = self.geometry
         p = self.parameters
         self.xo = [0.0]*(p.Nx*4)
+        self.eCount = 0
         # Get near-wall fluid element geometry
         (g.xcFnw,g.xcFfw) = self.getNearAndFarWallElements(g.xcF)
         (g.ycFnw,g.ycFfw) = self.getNearAndFarWallElements(g.ycF)
@@ -200,6 +203,35 @@ class fmmMethod():
             xfw += list(x[(i*p.chebN + 1):((i+1)*p.chebN - 1)])
         return xnw, xfw
 
+    def runEigSolver(self):
+        p = self.parameters
+        g = self.geometry
+
+        Ny = p.chebN
+        Nx = p.Nx
+        if p.deterministicBCs == True:
+            Ny = Ny - 2
+
+        if p.fluidOnly == False:
+            N = Ny*Nx + (p.Nco+1)*2
+        else:
+            N = Ny*Nx
+        
+        def tfun(y):
+            self.eCount += 1
+            print('Calling RHS fluid function.  Iteration = ' + str(self.eCount))
+            if iscomplexobj(y):
+                print("---WARNING!  Input vector is complex!")
+                yd_r = self.multRHSfluid(real(y))
+                yd_i = self.multRHSfluid(imag(y))
+                yd = [complex(yd_r[i],yd_i[i]) for i in xrange(len(y))]
+            else:
+                yd = self.multRHSfluid(y)
+            return yd
+
+        RHS = LinearOperator( (N,N), matvec=tfun, dtype='float64' )
+        (e,v) = eigen(RHS, k=6, M=None, sigma=None, which='LR', v0=None, ncv=None, maxiter=1000, tol=1e-3, return_eigenvectors=True)
+
     def runOdeSolver(self):
         p = self.parameters
         g = self.geometry
@@ -213,7 +245,10 @@ class fmmMethod():
         if p.deterministicBCs == True:
             Ny = Ny - 2
         nn = int(round(Nx/4.0)*Ny + round(Ny/2.0))
-        yinit = [0.0]*(Ny*Nx + (p.Nco+1)*2)
+        if p.fluidOnly == False:
+            yinit = [0.0]*(Ny*Nx + (p.Nco+1)*2)
+        else:
+            yinit = [0.0]*(Ny*Nx)
         yinit[nn] = 1e-2
         yinit[nn-1] = 1e-2
         # Set the timeslots
@@ -238,13 +273,19 @@ class fmmMethod():
 
     def getFlowAndWallParts(self,v,Nf,Nn):
         vf = v[0:Nf]
-        vw = v[Nf:Nf+2*Nn]
+        if Nf+2*Nn == len(v):
+            vw = v[Nf:Nf+2*Nn]
+        else:
+            vw = []
         return vf,vw
         
     def multRHSfluid(self,v):
         p = self.parameters
         g = self.geometry
         f = octFuncs.finiteDifference()
+        
+        # Ensure that the input vector is a list
+        v = [vv for vv in v]
         
         Nn = p.Nco + 1          # The number of nodes in the compliant panel section
         if p.deterministicBCs == True:
@@ -269,9 +310,10 @@ class fmmMethod():
        
         # Get the total normal flux through wall elements
         Vw = Vfw
-        for c in range(p.Nco):
-            i = p.Nx+p.Nup+c
-            Vw[i] -= (vw[c] + vw[c+1])/2.0
+        if p.fluidOnly == False:
+            for c in range(p.Nco):
+                i = p.Nx+p.Nup+c
+                Vw[i] -= (vw[c] + vw[c+1])/2.0
 
         # Solve for wall source strengths and nearest-to-wall flow element strengths together
         def preCond(xx):
@@ -291,7 +333,7 @@ class fmmMethod():
             # Adjust the upper panels to have a self-influence of -0.5
             for i in range(0,Nx):
                 vs[i] = vs[i] - ss[i]
-            
+                
             # Evaluate the matrix-vector product of wall-vortex influence coefficients
             sv = [x*g.dy[0] for x in xx[(Nx*2):(Nx*4)]]
             (uv,vv) = velocitylib.vortex_element_vel(g.XLnw,g.ycFnw*Np,sv*Np,g.XRnw,g.ycFnw*Np,sv*Np,list(g.xcW),list(g.ycW),threads=p.Nthreads,fmm=True,assume_point_length=32)
@@ -353,7 +395,8 @@ class fmmMethod():
             vdot[i] = Vf[i]*2.0 + U*d1dx[i] + p.nu*(d2dx[i] + d2dy[i])
         
         # Add the wall terms
-        vdot += [0.0]*len(vw)
+        if p.fluidOnly == False:
+            vdot += [0.0]*len(vw)
         
         return vdot
         
@@ -1124,10 +1167,17 @@ if __name__ == "__main__":
         f = fmmMethod()
         if p.solver == 'eigs':
             print('Solving EIGENVALUE problem...')
-            print('SORRY... NOT IMPLEMENTED JUST YET FOR EIGENVALUE PROBLEM... TRY THE NAIVE METHOD')
+            f.runEigSolver()
         elif p.solver == 'ode45':
             print 'Solving TIME-STEPPING (inital value) problem...'
             f.runOdeSolver()
+##            # Profiler (for optimisation)
+##            prof = cProfile.Profile()
+##            prof = prof.runctx("f.runOdeSolver()", globals(), locals())
+##            stats = pstats.Stats(prof)
+##            stats.sort_stats("cumulative")  # Or cumulative
+##            stats.print_stats(80)  # 80 = how many to print
+##            # ----------------
 ##        if os.path.exists('v.mat'):
 ##            # Variable thrown from octave already exists so go straight to multiplication
 ##            inDict = loadmat('v.mat')

@@ -9,12 +9,12 @@
 1e1             # Damping coefficient of the backing-damping (N/m)
 2.592e7         # Youngs modulus of the wall material
 5e0             # Stiffness of the backing springs
-False           # Calculate for the fluid only (assume rigid walls)
+True            # Calculate for the fluid only (assume rigid walls)
 False           # Allow slip at the boundary (prevent vorticity injection)
 True            # Deterministic boundary conditions
 True            # Periodic boundary conditions (left-inflow = right-outflow)
-20              # Number of virtual domains either side (for periodic BCs only)
+1               # Number of virtual domains either side (for periodic BCs only)
 FMM             # 'Naive' or 'FMM' - which solution methodology to use
 2               # Number of threads for FMM to operate over
 octave-3.2.3    # Octave version to use (for eigs and ode commands)
-ode45           # 'eigs' or 'ode45' - which solver to use
+eigs            # 'eigs' or 'ode45' - which solver to use
