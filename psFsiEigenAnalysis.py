@@ -79,6 +79,7 @@ class parameters():
             self.Nthreads = int(p[17])
             self.octave = p[18]
             self.solver = p[19]
+            self.Nsteps = float(p[20])
             
             # Some calculated fixed variables for the simulation
             self.Nx = self.Nup+self.Nco+self.Ndn                # Total number of panels along the length of the domain
@@ -230,7 +231,7 @@ class fmmMethod():
             return yd
 
         RHS = LinearOperator( (N,N), matvec=tfun, dtype='float64' )
-        (e,v) = eigen(RHS, k=6, M=None, sigma=None, which='LR', v0=None, ncv=None, maxiter=4000, tol=1e-3, return_eigenvectors=True)
+        (e,v) = eigen(RHS, k=6, M=None, sigma=None, which='LR', v0=None, ncv=None, maxiter=int(p.Nsteps), tol=1e-3, return_eigenvectors=True)
 
     def runOdeSolver(self):
         p = self.parameters
@@ -252,7 +253,7 @@ class fmmMethod():
         yinit[nn] = 1e-2
         yinit[nn-1] = 1e-2
         # Set the timeslots
-        tslot = [0,480]
+        tslot = [0,p.Nsteps]
         # Call the ode45 solver
         o = octFuncs.ode()
         path = 'results/' + str(int(p.R))
@@ -348,7 +349,7 @@ class fmmMethod():
         self.xo = sigma     # Update the initial guess
         #(sigma,F) = gmres(INTww,transpose(mat(RHSw)),tol=1e-3)
         if F != 0:
-            pdb.set_trace()
+            merr('Iterative matrix inverse did not converge.')
 
         # Get the normal velocity at fluid elements due to wall source and near-wall vortex elements and
         # Add to normal velocity at fluid elements due to themselves (already calculated)
