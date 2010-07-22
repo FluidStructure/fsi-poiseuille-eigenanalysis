@@ -233,11 +233,13 @@ class fmmMethod():
                 yd = self.multRHSfluid(y)
             return yd
 
-        RHS = LinearOperator( (N,N), matvec=tfun, dtype='float64' )
-        print(int(p.Nsteps))
+        ## Using the eigen call
+        #RHS = LinearOperator( (N,N), matvec=tfun, dtype='float64' )
+        #print(int(p.Nsteps))
         #(e,v) = eigen(RHS, k=6, M=None, sigma=None, which='LR', v0=None, ncv=None, maxiter=int(p.Nsteps), tol=p.eigTol, return_eigenvectors=True)
-	(e,v) = ARPACK_eigs(RHS, N, 6, which='LR', ncv=None, tol=1e-3)
-	print(e)
+        ## Using ARPACK_eigs
+        (e,v) = ARPACK_eigs(tfun, N, 6, which='LR', ncv=None, tol=p.eigTol)
+        print(e)
 
         # Make the output filename
         fname = self.makeEigFilename()
