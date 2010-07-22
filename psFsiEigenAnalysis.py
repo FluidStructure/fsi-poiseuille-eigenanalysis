@@ -80,6 +80,8 @@ class parameters():
             self.octave = p[18]
             self.solver = p[19]
             self.Nsteps = float(p[20])
+            self.invTol = float(p[21])
+            self.eigTol = float(p[22])
             
             # Some calculated fixed variables for the simulation
             self.Nx = self.Nup+self.Nco+self.Ndn                # Total number of panels along the length of the domain
@@ -231,7 +233,8 @@ class fmmMethod():
             return yd
 
         RHS = LinearOperator( (N,N), matvec=tfun, dtype='float64' )
-        (e,v) = eigen(RHS, k=6, M=None, sigma=None, which='LR', v0=None, ncv=None, maxiter=int(p.Nsteps), tol=1e-3, return_eigenvectors=True)
+        print(int(p.Nsteps))
+        (e,v) = eigen(RHS, k=6, M=None, sigma=None, which='LR', v0=None, ncv=None, maxiter=int(p.Nsteps), tol=p.eigTol, return_eigenvectors=True)
 
     def runOdeSolver(self):
         p = self.parameters
@@ -344,7 +347,7 @@ class fmmMethod():
         INTww = LinearOperator( (Nx*2*2,Nx*2*2), matvec=multINTww, dtype='float64' )
         pCond = LinearOperator( (Nx*2*2,Nx*2*2), matvec=preCond, dtype='float64' )
         RHSw = append(multiply(Vw,-1.0),multiply(Ufw,-1.0))
-        (sigma,F) = minres(INTww,transpose(mat(RHSw)),M=pCond,tol=1e-5,x0=self.xo)
+        (sigma,F) = minres(INTww,transpose(mat(RHSw)),M=pCond,tol=p.invTol,x0=self.xo)
         sigma = list(sigma)
         self.xo = sigma     # Update the initial guess
         #(sigma,F) = gmres(INTww,transpose(mat(RHSw)),tol=1e-3)
