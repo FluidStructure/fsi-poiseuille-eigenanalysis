@@ -236,6 +236,29 @@ class fmmMethod():
         print(int(p.Nsteps))
         (e,v) = eigen(RHS, k=6, M=None, sigma=None, which='LR', v0=None, ncv=None, maxiter=int(p.Nsteps), tol=p.eigTol, return_eigenvectors=True)
 
+        # Make the output filename
+        fname = makeEigFilename()
+        fname = 'results/' + fname
+
+        # Save the result
+        outDict = {}
+        outDict['evals'] = e
+        outDict['Veigs'] = v
+        savemat('A.mat',outDict)
+
+    def makeEigFilename(self):
+        p = self.parameters
+        g = self.geometry
+        fname = 'eigs_'
+        if p.fluidOnly == True:
+            fname += 'FLO_'
+        else:
+            fname += 'FSI_'
+        fname = fname + str(p.chebN) + 'x' + str(p.Nx)
+        fname = fname + '_' + str(int(p.R))
+        fname = fname + '.mat'
+        return fname
+
     def runOdeSolver(self):
         p = self.parameters
         g = self.geometry
