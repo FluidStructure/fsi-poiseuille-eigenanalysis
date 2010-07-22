@@ -2,6 +2,7 @@ from scipy import reshape, real, imag, array, exp, pi, linspace, divide, multipl
 from scipy import append, size, concatenate, dot, eye, mod, linalg, sum, column_stack
 from scipy.io import savemat, loadmat
 from scipy.sparse.linalg import gmres, minres, LinearOperator
+from scipy.sparse.linalg.eigen.arpack.speigs import ARPACK_eigs
 from scipy.sparse.linalg.eigen.arpack import eigen
 import matplotlib.pyplot as plt
 from matplotlib.image import NonUniformImage
@@ -234,17 +235,19 @@ class fmmMethod():
 
         RHS = LinearOperator( (N,N), matvec=tfun, dtype='float64' )
         print(int(p.Nsteps))
-        (e,v) = eigen(RHS, k=6, M=None, sigma=None, which='LR', v0=None, ncv=None, maxiter=int(p.Nsteps), tol=p.eigTol, return_eigenvectors=True)
+        #(e,v) = eigen(RHS, k=6, M=None, sigma=None, which='LR', v0=None, ncv=None, maxiter=int(p.Nsteps), tol=p.eigTol, return_eigenvectors=True)
+	(e,v) = ARPACK_eigs(RHS, N, 6, which='LR', ncv=None, tol=1e-3)
+	print(e)
 
         # Make the output filename
-        fname = makeEigFilename()
+        fname = self.makeEigFilename()
         fname = 'results/' + fname
 
         # Save the result
         outDict = {}
         outDict['evals'] = e
         outDict['Veigs'] = v
-        savemat('A.mat',outDict)
+        savemat(fname,outDict)
 
     def makeEigFilename(self):
         p = self.parameters
@@ -255,7 +258,7 @@ class fmmMethod():
         else:
             fname += 'FSI_'
         fname = fname + str(p.chebN) + 'x' + str(p.Nx)
-        fname = fname + '_' + str(int(p.R))
+        fname = fname + '_R' + str(int(p.R))
         fname = fname + '.mat'
         return fname
 

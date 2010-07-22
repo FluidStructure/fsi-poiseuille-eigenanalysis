@@ -15,9 +15,9 @@ True            # Deterministic boundary conditions
 True            # Periodic boundary conditions (left-inflow = right-outflow)
 1               # Number of virtual domains either side (for periodic BCs only)
 FMM             # 'Naive' or 'FMM' - which solution methodology to use
-2               # Number of threads for FMM to operate over
+6               # Number of threads for FMM to operate over
 octave-3.2.3    # Octave version to use (for eigs and ode commands)
 eigs            # 'eigs' or 'ode45' - which solver to use
-480.0           # Maximum time for ode45 OR Max number of steps for eigs (not used if eigTol > 0)
+3.0             # Maximum time for ode45 OR Max number of steps for eigs (not used if eigTol > 0)
 1e-6            # Tolerance for iterative matrix inverse (minres)
 1e-3            # Tolerance for eigenvalue solver (eigen)
