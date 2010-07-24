@@ -83,6 +83,7 @@ class parameters():
             self.Nsteps = float(p[20])
             self.invTol = float(p[21])
             self.eigTol = float(p[22])
+            self.apl = float(p[23])
             
             # Some calculated fixed variables for the simulation
             self.Nx = self.Nup+self.Nco+self.Ndn                # Total number of panels along the length of the domain
@@ -192,6 +193,11 @@ class fmmMethod():
         self.xo = [0.0]*(p.Nx*4)
         self.eCount = 0
         self.eVec = []
+        # Adjust panel tolerance on FMM call (and warn if necessary)
+        self.panTol = 0.001
+        if ((1.0-g.yc[0])/p.dx) < 0.001:
+            self.panTol = ((1.0-g.yc[0])/p.dx)/2.0
+            print('ADJUSTING PANEL TOLERANCE FOR FMM TO ' + str(self.panTol))
         # Get near-wall fluid element geometry
         (g.xcFnw,g.xcFfw) = self.getNearAndFarWallElements(g.xcF)
         (g.ycFnw,g.ycFfw) = self.getNearAndFarWallElements(g.ycF)
@@ -365,7 +371,7 @@ class fmmMethod():
         
         # Solve the velocity at all elements due to fluid elements (excluding nearest-to-wall fluid elements)
         Np = len(g.XLfw)/len(g.xcFfw)
-        (Ufa,Vfa) = velocitylib.vortex_element_vel(g.XLfw,g.ycFfw*Np,vfs*Np,g.XRfw,g.ycFfw*Np,vfs*Np,(g.xcFfw+list(g.xcW)),(g.ycFfw+list(g.ycW)),threads=p.Nthreads,fmm=True,assume_point_length=32)
+        (Ufa,Vfa) = velocitylib.vortex_element_vel(g.XLfw,g.ycFfw*Np,vfs*Np,g.XRfw,g.ycFfw*Np,vfs*Np,(g.xcFfw+list(g.xcW)),(g.ycFfw+list(g.ycW)),threads=p.Nthreads,fmm=True,assume_point_length=p.apl,panel_tolerance=self.panTol)
         Uf = Ufa[:Nf];Ufw = Ufa[Nf:]
         Vf = Vfa[:Nf];Vfw = Vfa[Nf:]
        
@@ -385,9 +391,9 @@ class fmmMethod():
         # Add to normal velocity at fluid elements due to themselves (already calculated)
         vNWs = [s*g.dy[0] for s in sigma[(Nx*2):(Nx*4)]]
         vNW = [s for s in sigma[(Nx*2):(Nx*4)]]
-        (Uwf,Vwf) = velocitylib.source_element_vel(g.XLw,list(g.ycW)*Np,sigma[0:2*Nx]*Np,g.XRw,list(g.ycW)*Np,sigma[0:2*Nx]*Np,g.xcFfw,g.ycFfw,threads=p.Nthreads,fmm=True,assume_point_length=32)
+        (Uwf,Vwf) = velocitylib.source_element_vel(g.XLw,list(g.ycW)*Np,sigma[0:2*Nx]*Np,g.XRw,list(g.ycW)*Np,sigma[0:2*Nx]*Np,g.xcFfw,g.ycFfw,threads=p.Nthreads,fmm=True,assume_point_length=p.apl,panel_tolerance=self.panTol)
         Vf = [Vf[i] + Vwf[i] for i in xrange(len(Vwf))]
-        (Uwf,Vwf) = velocitylib.vortex_element_vel(g.XLnw,g.ycFnw*Np,vNWs*Np,g.XRnw,g.ycFnw*Np,vNWs*Np,g.xcFfw,g.ycFfw,threads=p.Nthreads,fmm=True,assume_point_length=32)
+        (Uwf,Vwf) = velocitylib.vortex_element_vel(g.XLnw,g.ycFnw*Np,vNWs*Np,g.XRnw,g.ycFnw*Np,vNWs*Np,g.xcFfw,g.ycFfw,threads=p.Nthreads,fmm=True,assume_point_length=p.apl,panel_tolerance=self.panTol)
         Vf = [Vf[i] + Vwf[i] for i in xrange(len(Vwf))]
         
         # Calculate convective components (finite difference) for RHS of fluid transport
@@ -437,7 +443,7 @@ class fmmMethod():
             d4dx = f.d4dx([0.0]+v1+[0.0],1,p.dx)
             d4dx = d4dx[1:len(d4dx)-1]
             for i in xrange(Nn):
-                vdotWall[i+Nn] += -1.0*(p.B*d4dx[i] + p.K*v1[i]) - p.d*v2[i]
+                vdotWall[i+Nn] += -1.0*(p.B*d4dx[i] + p.K)*v1[i] - p.d*v2[i]
             # Append this onto the output vector
             vdot += vdotWall
         
@@ -470,7 +476,7 @@ class fmmMethod():
 
         # Solve the velocity at all elements due to fluid elements (excluding nearest-to-wall fluid elements)
         Np = len(g.XLfw)/len(g.xcFfw)
-        (Ufw,Vfw) = velocitylib.vortex_element_vel(g.XLfw,g.ycFfw*Np,vfs*Np,g.XRfw,g.ycFfw*Np,vfs*Np,list(g.xcW),list(g.ycW),threads=p.Nthreads,fmm=True,assume_point_length=32)
+        (Ufw,Vfw) = velocitylib.vortex_element_vel(g.XLfw,g.ycFfw*Np,vfs*Np,g.XRfw,g.ycFfw*Np,vfs*Np,list(g.xcW),list(g.ycW),threads=p.Nthreads,fmm=True,assume_point_length=p.apl,panel_tolerance=self.panTol)
        
         # Get the total normal flux through wall elements
         Vw = Vfw
@@ -513,14 +519,14 @@ class fmmMethod():
             # Evaulate the matrix-vector product of source/sink influence coefficients using Jarrads FMM
             #print('Evaluating matrix-vector product: INTww*X...')
             ss = [x for x in xx[0:(Nx*2)]]
-            (us,vs) = velocitylib.source_element_vel(g.XLw,list(g.ycW)*Np,ss*Np,g.XRw,list(g.ycW)*Np,ss*Np,list(g.xcW),list(g.ycW),threads=p.Nthreads,fmm=True,assume_point_length=32)
+            (us,vs) = velocitylib.source_element_vel(g.XLw,list(g.ycW)*Np,ss*Np,g.XRw,list(g.ycW)*Np,ss*Np,list(g.xcW),list(g.ycW),threads=p.Nthreads,fmm=True,assume_point_length=p.apl,panel_tolerance=self.panTol)
             # Adjust the upper panels to have a self-influence of -0.5
             for i in range(0,Nx):
                 vs[i] = vs[i] - ss[i]
                 
             # Evaluate the matrix-vector product of wall-vortex influence coefficients
             sv = [x*g.dy[0] for x in xx[(Nx*2):(Nx*4)]]
-            (uv,vv) = velocitylib.vortex_element_vel(g.XLnw,g.ycFnw*Np,sv*Np,g.XRnw,g.ycFnw*Np,sv*Np,list(g.xcW),list(g.ycW),threads=p.Nthreads,fmm=True,assume_point_length=32)
+            (uv,vv) = velocitylib.vortex_element_vel(g.XLnw,g.ycFnw*Np,sv*Np,g.XRnw,g.ycFnw*Np,sv*Np,list(g.xcW),list(g.ycW),threads=p.Nthreads,fmm=True,assume_point_length=p.apl,panel_tolerance=self.panTol)
             # Construct the output vector
             ov = [vs[i] + vv[i] for i in xrange(len(vv))] + [us[i] + uv[i] for i in xrange(len(uv))]
             return ov
@@ -583,6 +589,11 @@ class naiveMethod():
     def __init__(self):
         self.parameters = parameters.simulation()
         self.geometry = geometry()
+        # Adjust panel tolerance on FMM call (and warn if necessary)
+        self.panTol = 0.001
+        if ((1.0-g.yc[0])/p.dx) < 0.001:
+            self.panTol = ((1.0-g.yc[0])/p.dx)/2.0
+            print('ADJUSTING PANEL TOLERANCE FOR FMM TO ' + str(self.panTol))
 
     def runOdeSolver(self):
         self.generateInfluenceCoefficients()
@@ -901,7 +912,7 @@ class naiveMethod():
                 x = g.xcF[i]
                 y = g.ycF[i]
                 (xl,xr) = self.genPeriodicElements(x,y)
-                (U,V) = velocitylib.vortex_element_vel(xl,[y]*len(xl),[1.0]*len(xl),xr,[y]*len(xr),[1.0]*len(xr),X,Y,threads=p.Nthreads,fmm=True,assume_point_length=32)
+                (U,V) = velocitylib.vortex_element_vel(xl,[y]*len(xl),[1.0]*len(xl),xr,[y]*len(xr),[1.0]*len(xr),X,Y,threads=p.Nthreads,fmm=True,assume_point_length=p.apl,panel_tolerance=self.panTol)
                 self.ICs['INff'][:,i] = V[0:Nf]
                 self.ICs['ITff'][:,i] = U[0:Nf]
                 self.ICs['INfw'][:,i] = V[Nf:Nf+(2*Nw)]
@@ -917,7 +928,7 @@ class naiveMethod():
                 x = g.xcW[i]
                 y = g.ycW[i]
                 (xl,xr) = self.genPeriodicElements(x,y)
-                (U,V) = velocitylib.source_element_vel(xl,[y]*len(xl),[1.0]*len(xl),xr,[y]*len(xr),[1.0]*len(xr),X,Y,threads=p.Nthreads,fmm=True,assume_point_length=32)
+                (U,V) = velocitylib.source_element_vel(xl,[y]*len(xl),[1.0]*len(xl),xr,[y]*len(xr),[1.0]*len(xr),X,Y,threads=p.Nthreads,fmm=True,assume_point_length=p.apl,panel_tolerance=self.panTol)
                 self.ICs['INwf'][:,i] = V[0:Nf]
                 self.ICs['ITwf'][:,i] = U[0:Nf]
                 self.ICs['INww'][:,i] = V[Nf:Nf+(2*Nw)]
