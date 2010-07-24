@@ -191,6 +191,7 @@ class fmmMethod():
         p = self.parameters
         self.xo = [0.0]*(p.Nx*4)
         self.eCount = 0
+        self.eVec = []
         # Get near-wall fluid element geometry
         (g.xcFnw,g.xcFfw) = self.getNearAndFarWallElements(g.xcF)
         (g.ycFnw,g.ycFfw) = self.getNearAndFarWallElements(g.ycF)
@@ -217,38 +218,49 @@ class fmmMethod():
             Ny = Ny - 2
 
         if p.fluidOnly == False:
-            N = Ny*Nx + (p.Nco+1)*2
+            N = Ny*Nx + (p.Nco-1)*2
         else:
             N = Ny*Nx
         
         def tfun(y):
-            self.eCount += 1
-            print('Calling RHS fluid function.  Iteration = ' + str(self.eCount))
+            self.eCount += 1    # Update the iteration counter
+            self.eVec = y       # Update the initial guess for the future
+            print('Calling EIGEN tfun.  Iteration = ' + str(self.eCount))
             if iscomplexobj(y):
                 print("---WARNING!  Input vector is complex!")
-                yd_r = self.multRHSfluid(real(y))
-                yd_i = self.multRHSfluid(imag(y))
-                yd = [complex(yd_r[i],yd_i[i]) for i in xrange(len(y))]
+                merr('Input vector is complex!!')
+                #yd_r = self.multRHS(real(y))
+                #yd_i = self.multRHS(imag(y))
+                #yd = [complex(yd_r[i],yd_i[i]) for i in xrange(len(y))]
             else:
-                yd = self.multRHSfluid(y)
+                if p.fluidOnly == True:
+                    yd = self.multRHS(y)
+                else:
+                    RHSvector = self.multRHS(y)
+                    LHS = LinearOperator( (N,N), matvec=self.multLHS, dtype='float64' )
+                    (yd,F) = minres(LHS,transpose(mat(RHSvector)),tol=p.invTol)
+                    if F != 0:
+                        merr('Iterative matrix inverse did not converge.')
             return yd
 
         ## Using the eigen call
-        #RHS = LinearOperator( (N,N), matvec=tfun, dtype='float64' )
+        RHS = LinearOperator( (N,N), matvec=tfun, dtype='float64' )
         #print(int(p.Nsteps))
         #(e,v) = eigen(RHS, k=6, M=None, sigma=None, which='LR', v0=None, ncv=None, maxiter=int(p.Nsteps), tol=p.eigTol, return_eigenvectors=True)
+        (e,v) = eigen(RHS, k=6, M=None, sigma=None, which='LR', v0=None, ncv=None, maxiter=None, tol=p.eigTol, return_eigenvectors=True)
         ## Using ARPACK_eigs
-        (e,v) = ARPACK_eigs(tfun, N, 6, which='LR', ncv=None, tol=p.eigTol)
+        #(e,v) = ARPACK_eigs(tfun, N, 6, which='LR', ncv=None, tol=p.eigTol)
         print(e)
-
+        
         # Make the output filename
         fname = self.makeEigFilename()
         fname = 'results/' + fname
-
+        
         # Save the result
         outDict = {}
         outDict['evals'] = e
         outDict['Veigs'] = v
+        outDict['y0'] = self.eVec
         savemat(fname,outDict)
 
     def makeEigFilename(self):
@@ -268,19 +280,29 @@ class fmmMethod():
         p = self.parameters
         g = self.geometry
 
-        def tfun(t,y):
-            yd = self.multRHSfluid(y)
-            return yd
-        # Initialize with a spot disturbance
         Ny = p.chebN
         Nx = p.Nx
         if p.deterministicBCs == True:
             Ny = Ny - 2
-        nn = int(round(Nx/4.0)*Ny + round(Ny/2.0))
+
         if p.fluidOnly == False:
-            yinit = [0.0]*(Ny*Nx + (p.Nco+1)*2)
+            N = Ny*Nx + (p.Nco-1)*2
         else:
-            yinit = [0.0]*(Ny*Nx)
+            N = Ny*Nx
+
+        def tfun(t,y):
+            if p.fluidOnly == True:
+                yd = self.multRHS(y)
+            else:
+                RHSvector = self.multRHS(y)
+                LHS = LinearOperator( (N,N), matvec=self.multLHS, dtype='float64' )
+                (yd,F) = minres(LHS,transpose(mat(RHSvector)),tol=p.invTol)
+                if F != 0:
+                    merr('Iterative matrix inverse did not converge.')
+            return yd
+        # Initialize with a spot disturbance
+        nn = int(round(Nx/4.0)*Ny + round(Ny/2.0))
+        yinit = [0.0]*N
         yinit[nn] = 1e-2
         yinit[nn-1] = 1e-2
         # Set the timeslots
@@ -310,16 +332,12 @@ class fmmMethod():
         else:
             vw = []
         return vf,vw
-        
-    def multRHSfluid(self,v):
+
+    def getElementNumbers(self):
         p = self.parameters
         g = self.geometry
-        f = octFuncs.finiteDifference()
         
-        # Ensure that the input vector is a list
-        v = [vv for vv in v]
-        
-        Nn = p.Nco + 1          # The number of nodes in the compliant panel section
+        Nn = p.Nco - 1          # The number of nodes in the compliant panel section
         if p.deterministicBCs == True:
             Ny = p.chebN - 2        # The number of vertical fluid elements
         else:
@@ -328,6 +346,17 @@ class fmmMethod():
         # Get fluid and wall components of input vector "v"
         Nx = p.Nx
         Nf = Ny*p.Nx
+        return Nx, Ny, Nf, Nn
+
+    def multRHS(self,v):
+        print('-Multiplying by RHS matrix')
+        p = self.parameters
+        g = self.geometry
+        f = octFuncs.finiteDifference()
+        # Ensure that the input vector is a list
+        v = [vv for vv in v]
+        # The the number of various elements and flow and wall parts
+        (Nx, Ny, Nf, Nn) = self.getElementNumbers()
         (vf,vw) = self.getFlowAndWallParts(v,Nf,Nn)
         
         # Multiply flow element strengths "v" by element height to get singularity strengths
@@ -343,44 +372,14 @@ class fmmMethod():
         # Get the total normal flux through wall elements
         Vw = Vfw
         if p.fluidOnly == False:
+            Vnodes = [0.0] + vw[0:p.Nco-1] + [0.0]
             for c in range(p.Nco):
                 i = p.Nx+p.Nup+c
-                Vw[i] -= (vw[c] + vw[c+1])/2.0
+                Vw[i] -= (Vnodes[c] + Vnodes[c+1])/2.0
 
         # Solve for wall source strengths and nearest-to-wall flow element strengths together
-        def preCond(xx):
-            xo = xx
-            xo[0*Nx:1*Nx] = (xo[0*Nx:1*Nx])*-2.0                # Upper source elements
-            xo[1*Nx:2*Nx] = (xo[1*Nx:2*Nx])*2.0                 # Lower source elements
-            xo[2*Nx:3*Nx] = (xo[2*Nx:3*Nx])*-2.0*(1/dy[0])      # Upper vortex elements
-            xo[3*Nx:4*Nx] = (xo[3*Nx:4*Nx])*2.0*(1/dy[0])       # Lower vortex elements
-            return xo
-        def multINTww(xx):
-            Np = len(g.XLnw)/len(g.ycFnw)   # Number of periodic domains (for copying y-coordinates)
-            
-            # Evaulate the matrix-vector product of source/sink influence coefficients using Jarrads FMM
-            print('Evaluating matrix-vector product: INTww*X...')
-            ss = [x for x in xx[0:(Nx*2)]]
-            (us,vs) = velocitylib.source_element_vel(g.XLw,list(g.ycW)*Np,ss*Np,g.XRw,list(g.ycW)*Np,ss*Np,list(g.xcW),list(g.ycW),threads=p.Nthreads,fmm=True,assume_point_length=32)
-            # Adjust the upper panels to have a self-influence of -0.5
-            for i in range(0,Nx):
-                vs[i] = vs[i] - ss[i]
-                
-            # Evaluate the matrix-vector product of wall-vortex influence coefficients
-            sv = [x*g.dy[0] for x in xx[(Nx*2):(Nx*4)]]
-            (uv,vv) = velocitylib.vortex_element_vel(g.XLnw,g.ycFnw*Np,sv*Np,g.XRnw,g.ycFnw*Np,sv*Np,list(g.xcW),list(g.ycW),threads=p.Nthreads,fmm=True,assume_point_length=32)
-            # Construct the output vector
-            ov = [vs[i] + vv[i] for i in xrange(len(vv))] + [us[i] + uv[i] for i in xrange(len(uv))]
-            return ov
-        INTww = LinearOperator( (Nx*2*2,Nx*2*2), matvec=multINTww, dtype='float64' )
-        pCond = LinearOperator( (Nx*2*2,Nx*2*2), matvec=preCond, dtype='float64' )
         RHSw = append(multiply(Vw,-1.0),multiply(Ufw,-1.0))
-        (sigma,F) = minres(INTww,transpose(mat(RHSw)),M=pCond,tol=p.invTol,x0=self.xo)
-        sigma = list(sigma)
-        self.xo = sigma     # Update the initial guess
-        #(sigma,F) = gmres(INTww,transpose(mat(RHSw)),tol=1e-3)
-        if F != 0:
-            merr('Iterative matrix inverse did not converge.')
+        sigma = self.getWallElementStrengths(RHSw)
 
         # Get the normal velocity at fluid elements due to wall source and near-wall vortex elements and
         # Add to normal velocity at fluid elements due to themselves (already calculated)
@@ -428,19 +427,113 @@ class fmmMethod():
         
         # Add the wall terms
         if p.fluidOnly == False:
-            vdot += [0.0]*len(vw)
+            vdotWall = [0.0]*len(vw)
+            v1 = vw[:Nn]
+            v2 = vw[Nn:]
+            # v1_dot = v2
+            for i in xrange(Nn):
+                vdotWall[i] += v2[i]
+            # v2_dot = RHS of wall equation
+            d4dx = f.d4dx([0.0]+v1+[0.0],1,p.dx)
+            d4dx = d4dx[1:len(d4dx)-1]
+            for i in xrange(Nn):
+                vdotWall[i+Nn] += -1.0*(p.B*d4dx[i] + p.K*v1[i]) - p.d*v2[i]
+            # Append this onto the output vector
+            vdot += vdotWall
         
         return vdot
         
-    def multRHSwall(self,v):
-        # State equation for "v1_dot = v2"
+    def multLHS(self,v):
+        print('-Multiplying by LHS matrix')
+        p = self.parameters
+        g = self.geometry
+        f = octFuncs.finiteDifference()
+        # Ensure that the input vector is a list
+        v = [vv for vv in v]
+        # The the number of various elements and flow and wall parts
+        (Nx, Ny, Nf, Nn) = self.getElementNumbers()
+        (vf,vw) = self.getFlowAndWallParts(v,Nf,Nn)
+        v1 = vw[:Nn]
+        v2 = vw[Nn:]
 
-        # Get the average pressure across the lower wall (for cyclic) or at a point (for absolute)
-        # -- Get the tangential velocity at the wall
+        # Multiply flow element strengths "v" by element height to get singularity strengths
+        dy = g.dy[1:p.chebN-1]
+        vfs = [dy[mod(i,Ny)]*vf[i] for i in xrange(Nf)]
+
+        # Ones for all the fluid elements
+        vdot = [vv for vv in vf]
+
+        # Ones for v1 = v2 Part of the wall equations
+        vdot += [vv for vv in v1]
         
-        # Divide by (p.rhow*p.hw)
+        # v2 = RHS of wall equation
+
+        # Solve the velocity at all elements due to fluid elements (excluding nearest-to-wall fluid elements)
+        Np = len(g.XLfw)/len(g.xcFfw)
+        (Ufw,Vfw) = velocitylib.vortex_element_vel(g.XLfw,g.ycFfw*Np,vfs*Np,g.XRfw,g.ycFfw*Np,vfs*Np,list(g.xcW),list(g.ycW),threads=p.Nthreads,fmm=True,assume_point_length=32)
+       
+        # Get the total normal flux through wall elements
+        Vw = Vfw
+        if p.fluidOnly == False:
+            for c in range(p.Nco):
+                i = p.Nx+p.Nup+c
+                Vw[i] -= (vw[c] + vw[c+1])/2.0
+
+        # Solve for wall source strengths and nearest-to-wall flow element strengths together
+        RHSw = append(multiply(Vw,-1.0),multiply(Ufw,-1.0))
+        sigma = self.getWallElementStrengths(RHSw)
+       
+        sVLW = sigma[Nx*3:Nx*4]                         # Get the strength of the vertices along the lower wall
+        PF = [0.0] + [g.dy[0]*p.dx*s for s in sVLW]
+        PF = cumsum(PF)
+        PF = [-1.0*pp for pp in PF]
+        
+        Pav = sum(PF)/len(PF)
+        
+        # Add pressures and wall density etc to the LHS
+        vdot += [v2[i]*p.rhow*p.hw + (PF[p.Nup+1+i]-Pav) for i in xrange(len(v2))]
+
         return vdot
-        
+
+    def getWallElementStrengths(self,RHSv):
+        p = self.parameters
+        g = self.geometry
+        (Nx, Ny, Nf, Nn) = self.getElementNumbers()
+        # Solve for wall source strengths and nearest-to-wall flow element strengths together
+        def preCond(xx):
+            xo = xx
+            xo[0*Nx:1*Nx] = (xo[0*Nx:1*Nx])*-2.0                  # Upper source elements
+            xo[1*Nx:2*Nx] = (xo[1*Nx:2*Nx])*2.0                   # Lower source elements
+            xo[2*Nx:3*Nx] = (xo[2*Nx:3*Nx])*-2.0*(1/g.dy[0])      # Upper vortex elements
+            xo[3*Nx:4*Nx] = (xo[3*Nx:4*Nx])*2.0*(1/g.dy[0])       # Lower vortex elements
+            return xo
+        def multINTww(xx):
+            Np = len(g.XLnw)/len(g.ycFnw)   # Number of periodic domains (for copying y-coordinates)
+            
+            # Evaulate the matrix-vector product of source/sink influence coefficients using Jarrads FMM
+            #print('Evaluating matrix-vector product: INTww*X...')
+            ss = [x for x in xx[0:(Nx*2)]]
+            (us,vs) = velocitylib.source_element_vel(g.XLw,list(g.ycW)*Np,ss*Np,g.XRw,list(g.ycW)*Np,ss*Np,list(g.xcW),list(g.ycW),threads=p.Nthreads,fmm=True,assume_point_length=32)
+            # Adjust the upper panels to have a self-influence of -0.5
+            for i in range(0,Nx):
+                vs[i] = vs[i] - ss[i]
+                
+            # Evaluate the matrix-vector product of wall-vortex influence coefficients
+            sv = [x*g.dy[0] for x in xx[(Nx*2):(Nx*4)]]
+            (uv,vv) = velocitylib.vortex_element_vel(g.XLnw,g.ycFnw*Np,sv*Np,g.XRnw,g.ycFnw*Np,sv*Np,list(g.xcW),list(g.ycW),threads=p.Nthreads,fmm=True,assume_point_length=32)
+            # Construct the output vector
+            ov = [vs[i] + vv[i] for i in xrange(len(vv))] + [us[i] + uv[i] for i in xrange(len(uv))]
+            return ov
+        INTww = LinearOperator( (Nx*2*2,Nx*2*2), matvec=multINTww, dtype='float64' )
+        pCond = LinearOperator( (Nx*2*2,Nx*2*2), matvec=preCond, dtype='float64' )
+        (sigma,F) = minres(INTww,transpose(mat(RHSv)),M=pCond,tol=p.invTol,x0=self.xo)
+        sigma = list(sigma)
+        if F != 0:
+            merr('Iterative matrix inverse did not converge.')
+        else:
+            print('--Sucessfully completed matrix-vector product: INTww*X...')
+        return sigma
+
     def genPeriodicElements(self,x):
         p = self.parameters
         dx = p.dx
@@ -1048,7 +1141,7 @@ class ppOde45(postProc):
                     plt.grid(True)
             else:
                 vm = inDict['y'][Ny*Nx:Ny*Nx+Nco-1]
-                vm = concatenate(([0.0],vm[:,0],[0.0]))
+                vm = array([0.0] + [vv for vv in vm] + [0.0])
                 plt.plot(vm,'k-')
                 absmax = max(abs(vm))
                 if absmax > alim:
