@@ -245,7 +245,7 @@ class fmmMethod():
                 else:
                     RHSvector = self.multRHS(y)
                     LHS = LinearOperator( (N,N), matvec=self.multLHS, dtype='float64' )
-                    (yd,F) = minres(LHS,transpose(mat(RHSvector)),tol=p.invTol,x0=self.x0)
+                    (yd,F) = gmres(LHS,transpose(mat(RHSvector)),tol=p.invTol,x0=self.x0)
                     if F != 0:
                         merr('Iterative matrix inverse did not converge.')
                     self.x0 = yd    # Update initial guess
@@ -304,7 +304,7 @@ class fmmMethod():
             else:
                 RHSvector = self.multRHS(y)
                 LHS = LinearOperator( (N,N), matvec=self.multLHS, dtype='float64' )
-                (yd,F) = minres(LHS,transpose(mat(RHSvector)),tol=p.invTol)
+                (yd,F) = gmres(LHS,transpose(mat(RHSvector)),tol=p.invTol)
                 if F != 0:
                     merr('Iterative matrix inverse did not converge.')
             return yd
