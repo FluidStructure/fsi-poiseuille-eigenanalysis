@@ -415,6 +415,7 @@ class fmmMethod():
             del d2dx[:2*Ny]
         # Get chebyshev second-order gradients in the y-direction (must add in near-wall vortex strengths)
         vfIncNearWall = []
+        #pdb.set_trace()
         ##vNW = [0.0]*len(g.xcFnw)    # For debugging only
         for i in xrange(p.Nx):
             vfIncNearWall += [vNW[i]]
@@ -534,7 +535,8 @@ class fmmMethod():
             return ov
         INTww = LinearOperator( (Nx*2*2,Nx*2*2), matvec=multINTww, dtype='float64' )
         pCond = LinearOperator( (Nx*2*2,Nx*2*2), matvec=preCond, dtype='float64' )
-        (sigma,F) = minres(INTww,transpose(mat(RHSv)),M=pCond,tol=p.invTol,x0=self.xo)
+        #(sigma,F) = minres(INTww,transpose(mat(RHSv)),M=pCond,tol=p.invTol,x0=self.xo)
+        (sigma,F) = gmres(INTww,transpose(mat(RHSv)),M=pCond,tol=p.invTol,x0=self.xo)
         sigma = list(sigma)
         if F != 0:
             merr('Iterative matrix inverse did not converge.')
@@ -592,6 +594,8 @@ class naiveMethod():
         self.parameters = parameters.simulation()
         self.geometry = geometry()
         # Adjust panel tolerance on FMM call (and warn if necessary)
+        g = self.geometry
+        p = self.parameters
         self.panTol = 0.001
         if ((1.0-g.yc[0])/p.dx) < 0.001:
             self.panTol = ((1.0-g.yc[0])/p.dx)/2.0
@@ -616,6 +620,7 @@ class naiveMethod():
             Ny = Ny - 2
         nn = int(round(Nx/4.0)*Ny + round(Ny/2.0))
         yinit[nn] = 1e-2
+        yinit[nn-1] = 1e-2
         # Set the timeslots
         tslot = [0,480]
         # Call the ode45 solver
@@ -864,7 +869,7 @@ class naiveMethod():
         dx = p.dx
         L = p.LT
         if p.periodicBCs == True:
-            N = 20      # Number of periodic elements either side of current element
+            N = p.Ndomains      # Number of periodic elements either side of current element
         else:
             N = 0
         n = (2*N) + 1
@@ -882,7 +887,7 @@ class naiveMethod():
         if forceMake == False:
             if os.path.exists('ICs.mat') or os.path.exists('VARS.mat'):
                 invec = loadmat('VARS.mat',struct_as_record=True)
-                if (int(invec['Nx'])==p.Nx) and (int(invec['chebN'])==p.chebN) and (int(invec['LT'])==int(p.LT)) and (str(p.periodicBCs) in invec['periodicBCs']):
+                if (int(invec['Nx'])==p.Nx) and (int(invec['Ndomains'])==p.Ndomains) and (int(invec['chebN'])==p.chebN) and (int(invec['LT'])==int(p.LT)) and (str(p.periodicBCs) in invec['periodicBCs']):
                     print 'Geometry seems to be the same as that already saved...'
                     print 'Loading existing Influence Coefficient matrices...'
                     self.ICs = loadmat('ICs.mat',struct_as_record=True)
