@@ -1,7 +1,7 @@
 from scipy import reshape, real, imag, array, exp, pi, linspace, divide, multiply, iscomplexobj
 from scipy import append, size, concatenate, dot, eye, mod, linalg, sum, column_stack
 from scipy.io import savemat, loadmat
-from scipy.sparse.linalg import gmres, minres, LinearOperator
+from scipy.sparse.linalg import gmres, minres, bicgstab, LinearOperator
 from scipy.sparse.linalg.eigen.arpack.speigs import ARPACK_eigs
 from scipy.sparse.linalg.eigen.arpack import eigen
 import matplotlib.pyplot as plt
@@ -245,7 +245,7 @@ class fmmMethod():
                 else:
                     RHSvector = self.multRHS(y)
                     LHS = LinearOperator( (N,N), matvec=self.multLHS, dtype='float64' )
-                    (yd,F) = gmres(LHS,transpose(mat(RHSvector)),tol=p.invTol,x0=self.x0)
+                    (yd,F) = bicgstab(LHS,transpose(mat(RHSvector)),M=pCond,tol=p.invTol,x0=RHSvector)
                     if F != 0:
                         merr('Iterative matrix inverse did not converge.')
                     self.x0 = yd    # Update initial guess
@@ -304,7 +304,7 @@ class fmmMethod():
             else:
                 RHSvector = self.multRHS(y)
                 LHS = LinearOperator( (N,N), matvec=self.multLHS, dtype='float64' )
-                (yd,F) = gmres(LHS,transpose(mat(RHSvector)),tol=p.invTol)
+                (yd,F) = bicgstab(LHS,transpose(mat(RHSvector)),tol=p.invTol,x0=RHSvector)
                 if F != 0:
                     merr('Iterative matrix inverse did not converge.')
             return yd

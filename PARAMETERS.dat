@@ -1,9 +1,9 @@
 6000.0          # Reynolds number (based on displacement thickness of boundary layer) instability from Orr-Sommerfeld is at 5800 (corresponding wavenumber = 1.025)
-64              # Number of Chebyshev collocation points in the wall-normal direction
-50            	# Number of collocation points (panels) in the x-direction (for the solid wall elements) on the first (upstream) part of the lower wall
-400             # Number of collocation points (panels) in the x-direction (for the compliant wall elements)
-50            	# Number of collocation points (panels) in the x-direction (for the solid wall elements) on the second (downstream) part of the lower wall
-100.0           # Length of the channel section (m)
+16              # Number of Chebyshev collocation points in the wall-normal direction
+10            	# Number of collocation points (panels) in the x-direction (for the solid wall elements) on the first (upstream) part of the lower wall
+80             # Number of collocation points (panels) in the x-direction (for the compliant wall elements)
+10            	# Number of collocation points (panels) in the x-direction (for the solid wall elements) on the second (downstream) part of the lower wall
+20.0           # Length of the channel section (m)
 166.67          # Density of the wall material (kg/m3)
 0.002           # Thickness of the wall (m)
 0.0             # Damping coefficient of the backing-damping (Ns/m3)
