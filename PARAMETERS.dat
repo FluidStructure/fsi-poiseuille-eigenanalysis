@@ -1,5 +1,5 @@
 6000.0          # Reynolds number (based on displacement thickness of boundary layer) instability from Orr-Sommerfeld is at 5800 (corresponding wavenumber = 1.025)
-32              # Number of Chebyshev collocation points in the wall-normal direction
+64              # Number of Chebyshev collocation points in the wall-normal direction
 50            	# Number of collocation points (panels) in the x-direction (for the solid wall elements) on the first (upstream) part of the lower wall
 400             # Number of collocation points (panels) in the x-direction (for the compliant wall elements)
 50            	# Number of collocation points (panels) in the x-direction (for the solid wall elements) on the second (downstream) part of the lower wall
@@ -9,7 +9,7 @@
 0.0             # Damping coefficient of the backing-damping (Ns/m3)
 0.2e9           # Youngs modulus of the wall material (N/m2)
 0.53            # Stiffness of the backing springs (N/m3)
-False           # Calculate for the fluid only (assume rigid walls)
+True           # Calculate for the fluid only (assume rigid walls)
 False           # Allow slip at the boundary (prevent vorticity injection)
 True            # Deterministic boundary conditions
 True            # Periodic boundary conditions (left-inflow = right-outflow)
@@ -17,8 +17,8 @@ True            # Periodic boundary conditions (left-inflow = right-outflow)
 FMM             # 'Naive' or 'FMM' - which solution methodology to use
 2               # Number of threads for FMM to operate over
 octave-3.2.3    # Octave version to use (for eigs and ode commands)
-ode45           # 'eigs' or 'ode45' - which solver to use
+eigs            # 'eigs' or 'ode45' - which solver to use
 30.0            # Maximum time for ode45
 1e-6            # Tolerance for iterative matrix inverse (minres)
-1e-1            # Tolerance for eigenvalue solver (eigen)
+1e-1           # Tolerance for eigenvalue solver (eigen)
 1.0             # Assume Point Length

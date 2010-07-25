@@ -193,6 +193,7 @@ class fmmMethod():
         self.xo = [0.0]*(p.Nx*4)
         self.eCount = 0
         self.eVec = []
+        self.x0 = None
         # Adjust panel tolerance on FMM call (and warn if necessary)
         self.panTol = 0.001
         if ((1.0-g.yc[0])/p.dx) < 0.001:
@@ -208,7 +209,7 @@ class fmmMethod():
 
     def getNearAndFarWallElements(self,x):
         p = self.parameters
-        xnw = [x[i*p.chebN] for i in xrange(p.Nx)] + [x[(i+1)*(p.chebN-1)] for i in xrange(p.Nx)]
+        xnw = [x[i*p.chebN] for i in xrange(p.Nx)] + [x[((i+1)*(p.chebN))-1] for i in xrange(p.Nx)]
         xfw = []
         for i in xrange(p.Nx):
             xfw += list(x[(i*p.chebN + 1):((i+1)*p.chebN - 1)])
@@ -244,9 +245,10 @@ class fmmMethod():
                 else:
                     RHSvector = self.multRHS(y)
                     LHS = LinearOperator( (N,N), matvec=self.multLHS, dtype='float64' )
-                    (yd,F) = minres(LHS,transpose(mat(RHSvector)),tol=p.invTol)
+                    (yd,F) = minres(LHS,transpose(mat(RHSvector)),tol=p.invTol,x0=self.x0)
                     if F != 0:
                         merr('Iterative matrix inverse did not converge.')
+                    self.x0 = yd    # Update initial guess
             return yd
 
         ## Using the eigen call
@@ -1201,7 +1203,7 @@ class ppEigs(postProc):
         print fname
         indict = loadmat(pg.resultsDir + '/' + fname,struct_as_record=True)
         v = [indict['Veigs'][i][modeNum] for i in xrange(len(indict['Veigs']))]
-        e = indict['evals'][modeNum][0]
+        e = indict['evals'][modeNum]
         if pg.ignoreTemporalGrowth == True:
             E = complex(0,imag(e))
         else:
@@ -1223,7 +1225,6 @@ class ppEigs(postProc):
         Z = []
         alim=1e-8
         for t in tRange:
-            
             timeComponent = exp(E*t)
             vmT = vm*timeComponent
             vmT = real(vmT)
