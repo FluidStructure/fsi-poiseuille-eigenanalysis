@@ -521,8 +521,8 @@ class fmmMethod():
             xo = xx
             xo[0*Nx:1*Nx] = (xo[0*Nx:1*Nx])*-2.0                  # Upper source elements
             xo[1*Nx:2*Nx] = (xo[1*Nx:2*Nx])*2.0                   # Lower source elements
-            xo[2*Nx:3*Nx] = (xo[2*Nx:3*Nx])*2.0*(1/g.dy[0])      # Upper vortex elements
-            xo[3*Nx:4*Nx] = (xo[3*Nx:4*Nx])*-2.0*(1/g.dy[0])       # Lower vortex elements
+            xo[2*Nx:3*Nx] = (xo[2*Nx:3*Nx])*2.0*(1/g.dy[0])       # Upper vortex elements
+            xo[3*Nx:4*Nx] = (xo[3*Nx:4*Nx])*-2.0*(1/g.dy[0])      # Lower vortex elements
             return xo
         def multINTww(xx):
             #print("Doing INTww*x...")
