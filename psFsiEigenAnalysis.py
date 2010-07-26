@@ -81,9 +81,10 @@ class parameters():
             self.octave = p[18]
             self.solver = p[19]
             self.Nsteps = float(p[20])
-            self.invTol = float(p[21])
-            self.eigTol = float(p[22])
-            self.apl = float(p[23])
+            self.maxStep = float(p[21])
+            self.invTol = float(p[22])
+            self.eigTol = float(p[23])
+            self.apl = float(p[24])
             
             # Some calculated fixed variables for the simulation
             self.Nx = self.Nup+self.Nco+self.Ndn                # Total number of panels along the length of the domain
@@ -323,7 +324,7 @@ class fmmMethod():
         else:
             path = path + '/FSI/'
         o.outPath = path
-        o.ode45(tfun,tslot,yinit)
+        o.ode45(tfun,tslot,yinit,MaxStep=p.maxStep)
 
     def callOctave(self):
         # Save generalised matrix to A.mat
@@ -499,7 +500,7 @@ class fmmMethod():
 ##        Pav = sum(PF)/len(PF)
 ##        PFp = [(pp-Pav) for pp in PF]
         
-        PFp = [0.0] + [g.dy[0]*p.dx*(sVLW[i]+sVLW[i+1])/2.0 for i in xrange(len(sVLW)-1)] + [0.0]
+        PFp = [0.0] + [-1.0*g.dy[0]*p.dx*(sVLW[i]+sVLW[i+1])/2.0 for i in xrange(len(sVLW)-1)] + [0.0]
         
         # Add pressures and wall density etc to the LHS
         vdot += [v2[i]*p.rhow*p.hw + PFp[p.Nup+1+i] for i in xrange(len(v2))]
@@ -633,7 +634,7 @@ class naiveMethod():
         else:
             path = path + '/FSI/'
         o.outPath = path
-        o.ode45(tfun,tslot,yinit)
+        o.ode45(tfun,tslot,yinit,MaxStep=p.maxStep)
 
     def runSolver(self):
         self.generateInfluenceCoefficients()

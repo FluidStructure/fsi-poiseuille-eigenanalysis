@@ -5,10 +5,10 @@
 10            	# Number of collocation points (panels) in the x-direction (for the solid wall elements) on the second (downstream) part of the lower wall
 20.0           # Length of the channel section (m)
 166.67          # Density of the wall material (kg/m3)
-0.01           # Thickness of the wall (m)
+0.01            # Thickness of the wall (m)
 0.0             # Damping coefficient of the backing-damping (Ns/m3)
 0.2e9           # Youngs modulus of the wall material (N/m2)
-500.0           # Stiffness of the backing springs (N/m3)
+50.0            # Stiffness of the backing springs (N/m3)
 False           # Calculate for the fluid only (assume rigid walls)
 False           # Allow slip at the boundary (prevent vorticity injection)
 True            # Deterministic boundary conditions
@@ -19,6 +19,7 @@ FMM             # 'Naive' or 'FMM' - which solution methodology to use
 octave-3.2.3    # Octave version to use (for eigs and ode commands)
 ode45           # 'eigs' or 'ode45' - which solver to use
 400.0           # Maximum time for ode45
+0.05		# Maximum step size
 1e-6            # Tolerance for iterative matrix inverse (minres)
 1e-1           # Tolerance for eigenvalue solver (eigen)
 1.0             # Assume Point Length
