@@ -498,7 +498,7 @@ class fmmMethod():
         # Solve for wall source strengths and nearest-to-wall flow element strengths together
         RHSw = append(multiply(Vw,-1.0),multiply(Ufw,-1.0))
         sigma = self.getWallElementStrengths(RHSw)
-       
+        
         sVLW = sigma[Nx*3:Nx*4]                         # Get the strength of the vertices along the lower wall
         sVLWcorr = sVLW - (sum(sVLW)/len(sVLW))
         PF = [0.0] + [g.dy[0]*p.dx*s for s in sVLWcorr]
@@ -545,7 +545,7 @@ class fmmMethod():
             # Construct the output vector
             ov = [vs[i] + vv[i] for i in xrange(len(vv))] + [us[i] + uv[i] for i in xrange(len(uv))]
             return ov
-        self.xo = preCond(RHSv)
+        #self.xo = preCond(RHSv)
         INTww = LinearOperator( (Nx*2*2,Nx*2*2), matvec=multINTww, dtype='float64' )
         pCond = LinearOperator( (Nx*2*2,Nx*2*2), matvec=preCond, dtype='float64' )
         #(sigma,F) = minres(INTww,transpose(mat(RHSv)),M=pCond,tol=p.invTol,x0=self.xo)
