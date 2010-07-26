@@ -486,13 +486,14 @@ class fmmMethod():
         # Solve the velocity at all elements due to fluid elements (excluding nearest-to-wall fluid elements)
         Np = len(g.XLfw)/len(g.xcFfw)
         (Ufw,Vfw) = velocitylib.vortex_element_vel(g.XLfw,g.ycFfw*Np,vfs*Np,g.XRfw,g.ycFfw*Np,vfs*Np,list(g.xcW),list(g.ycW),threads=p.Nthreads,fmm=True,assume_point_length=p.apl,panel_tolerance=self.panTol)
-       
+        
         # Get the total normal flux through wall elements
         Vw = Vfw
         if p.fluidOnly == False:
+            Vnodes = [0.0] + vw[0:p.Nco-1] + [0.0]
             for c in range(p.Nco):
                 i = p.Nx+p.Nup+c
-                Vw[i] -= (vw[c] + vw[c+1])/2.0
+                Vw[i] -= (Vnodes[c] + Vnodes[c+1])/2.0
 
         # Solve for wall source strengths and nearest-to-wall flow element strengths together
         RHSw = append(multiply(Vw,-1.0),multiply(Ufw,-1.0))
@@ -508,7 +509,8 @@ class fmmMethod():
 ##        PFp = [0.0] + [-1.0*g.dy[0]*p.dx*(sVLW[i]+sVLW[i+1])/2.0 for i in xrange(len(sVLW)-1)] + [0.0]
         
         # Add pressures and wall density etc to the LHS
-        vdot += [v2[i]*p.rhow*p.hw + PFp[p.Nup+1+i] for i in xrange(len(v2))]
+        v2LHS = [v2[i]*p.rhow*p.hw + PFp[p.Nup+1+i] for i in xrange(len(v2))]
+        vdot += v2LHS
 
         return vdot
 
