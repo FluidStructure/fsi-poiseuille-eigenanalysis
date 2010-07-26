@@ -309,11 +309,16 @@ class fmmMethod():
                 if F != 0:
                     merr('Iterative matrix inverse did not converge.')
             return yd
-        # Initialize with a spot disturbance
-        nn = int(round(Nx/4.0)*Ny + round(Ny/2.0))
         yinit = [0.0]*N
-        yinit[nn] = 1e-2
-        yinit[nn-1] = 1e-2
+##        # Initialize with a spot disturbance
+##        nn = int(round(Nx/4.0)*Ny + round(Ny/2.0))
+##        yinit[nn] = 1e-2;yinit[nn+Ny*20] = -1e-2
+##        yinit[nn-1] = 1e-2;yinit[nn-1+Ny*20] = -1e-2
+        # Initialize with a sine-wave disturbance at the centreline
+        NyHalf = int(round(Ny/2.0))
+        for i in xrange(Nx):
+            yinit[i*Ny + NyHalf] = 1e-2*np.sin(pi*g.xc[i])
+            yinit[i*Ny + NyHalf-1] = 1e-2*np.sin(pi*g.xc[i])
         # Set the timeslots
         tslot = [0,p.Nsteps]
         # Call the ode45 solver
@@ -494,13 +499,13 @@ class fmmMethod():
         sigma = self.getWallElementStrengths(RHSw)
        
         sVLW = sigma[Nx*3:Nx*4]                         # Get the strength of the vertices along the lower wall
-##        PF = [0.0] + [g.dy[0]*p.dx*s for s in sVLW]
-##        PF = cumsum(PF)
-##        PF = [-1.0*pp for pp in PF]
-##        Pav = sum(PF)/len(PF)
-##        PFp = [(pp-Pav) for pp in PF]
+        PF = [0.0] + [g.dy[0]*p.dx*s for s in sVLW]
+        PF = cumsum(PF)
+        PF = [-1.0*pp for pp in PF]
+        Pav = sum(PF)/len(PF)
+        PFp = [(pp-Pav) for pp in PF]
         
-        PFp = [0.0] + [-1.0*g.dy[0]*p.dx*(sVLW[i]+sVLW[i+1])/2.0 for i in xrange(len(sVLW)-1)] + [0.0]
+##        PFp = [0.0] + [-1.0*g.dy[0]*p.dx*(sVLW[i]+sVLW[i+1])/2.0 for i in xrange(len(sVLW)-1)] + [0.0]
         
         # Add pressures and wall density etc to the LHS
         vdot += [v2[i]*p.rhow*p.hw + PFp[p.Nup+1+i] for i in xrange(len(v2))]
@@ -609,23 +614,35 @@ class naiveMethod():
         self.saveVariables()
         self.generateLHSandRHS()
         self.makeGeneralized()
+        
+        Ny = p.chebN
+        Nx = p.Nx
+        if p.deterministicBCs == True:
+            Ny = Ny - 2
+
+        if p.fluidOnly == False:
+            N = Ny*Nx + (p.Nco-1)*2
+        else:
+            N = Ny*Nx        
+        
         def tfun(t,y):
             yd = [0.0]*len(y)
             for i in range(len(n.RHSGeneral)):
                 r = self.RHSGeneral[i]
                 yd[i] = sum(r*y)
             return yd
-        # Initialize with a spot disturbance
-        yinit = [0.0]*len(n.RHSGeneral)
-        Ny = self.parameters.chebN
-        Nx = self.parameters.Nx
-        if self.parameters.deterministicBCs == True:
-            Ny = Ny - 2
-        nn = int(round(Nx/4.0)*Ny + round(Ny/2.0))
-        yinit[nn] = 1e-2
-        yinit[nn-1] = 1e-2
+        yinit = [0.0]*N
+##        # Initialize with a spot disturbance
+##        nn = int(round(Nx/4.0)*Ny + round(Ny/2.0))
+##        yinit[nn] = 1e-2;yinit[nn+Ny*20] = -1e-2
+##        yinit[nn-1] = 1e-2;yinit[nn-1+Ny*20] = -1e-2
+        # Initialize with a sine-wave disturbance at the centreline
+        NyHalf = int(round(Ny/2.0))
+        for i in xrange(Nx):
+            yinit[i*Ny + NyHalf] = 1e-2*np.sin(pi*g.xc[i])
+            yinit[i*Ny + NyHalf-1] = 1e-2*np.sin(pi*g.xc[i])
         # Set the timeslots
-        tslot = [0,480]
+        tslot = [0,p.Nsteps]
         # Call the ode45 solver
         o = octFuncs.ode()
         path = 'results/' + str(int(self.parameters.R))
