@@ -317,8 +317,8 @@ class fmmMethod():
         # Initialize with a sine-wave disturbance at the centreline
         NyHalf = int(round(Ny/2.0))
         for i in xrange(Nx):
-            yinit[i*Ny + NyHalf] = 1e-2*np.sin(pi*g.xc[i])
-            yinit[i*Ny + NyHalf-1] = 1e-2*np.sin(pi*g.xc[i])
+            yinit[i*Ny + NyHalf] = 1e-2*np.sin(2.0*pi*g.xc[i]/(p.LT/10.0))
+            yinit[i*Ny + NyHalf-1] = 1e-2*np.sin(2.0*pi*g.xc[i]/(p.LT/10.0))
         # Set the timeslots
         tslot = [0,p.Nsteps]
         # Call the ode45 solver
@@ -329,7 +329,7 @@ class fmmMethod():
         else:
             path = path + '/FSI/'
         o.outPath = path
-        o.ode45(tfun,tslot,yinit,MaxStep=p.maxStep)
+        o.ode45(tfun,tslot,yinit,MaxStep=p.maxStep,InitialStep=p.maxStep)
 
     def callOctave(self):
         # Save generalised matrix to A.mat
@@ -654,7 +654,7 @@ class naiveMethod():
         else:
             path = path + '/FSI/'
         o.outPath = path
-        o.ode45(tfun,tslot,yinit,MaxStep=p.maxStep)
+        o.ode45(tfun,tslot,yinit,MaxStep=p.maxStep,InitialStep=p.maxStep)
 
     def runSolver(self):
         self.generateInfluenceCoefficients()
