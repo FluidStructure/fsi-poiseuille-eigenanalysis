@@ -191,7 +191,7 @@ class fmmMethod():
         # Get some critical geometry that is used often
         g = self.geometry
         p = self.parameters
-        self.xo = [0.0]*(p.Nx*4)
+        self.xo = None
         self.eCount = 0
         self.eVec = []
         self.x0 = None
@@ -521,10 +521,11 @@ class fmmMethod():
             xo = xx
             xo[0*Nx:1*Nx] = (xo[0*Nx:1*Nx])*-2.0                  # Upper source elements
             xo[1*Nx:2*Nx] = (xo[1*Nx:2*Nx])*2.0                   # Lower source elements
-            xo[2*Nx:3*Nx] = (xo[2*Nx:3*Nx])*-2.0*(1/g.dy[0])      # Upper vortex elements
-            xo[3*Nx:4*Nx] = (xo[3*Nx:4*Nx])*2.0*(1/g.dy[0])       # Lower vortex elements
+            xo[2*Nx:3*Nx] = (xo[2*Nx:3*Nx])*2.0*(1/g.dy[0])      # Upper vortex elements
+            xo[3*Nx:4*Nx] = (xo[3*Nx:4*Nx])*-2.0*(1/g.dy[0])       # Lower vortex elements
             return xo
         def multINTww(xx):
+            #print("Doing INTww*x...")
             Np = len(g.XLnw)/len(g.ycFnw)   # Number of periodic domains (for copying y-coordinates)
             
             # Evaulate the matrix-vector product of source/sink influence coefficients using Jarrads FMM
@@ -541,10 +542,12 @@ class fmmMethod():
             # Construct the output vector
             ov = [vs[i] + vv[i] for i in xrange(len(vv))] + [us[i] + uv[i] for i in xrange(len(uv))]
             return ov
+        self.xo = preCond(RHSv)
         INTww = LinearOperator( (Nx*2*2,Nx*2*2), matvec=multINTww, dtype='float64' )
         pCond = LinearOperator( (Nx*2*2,Nx*2*2), matvec=preCond, dtype='float64' )
         #(sigma,F) = minres(INTww,transpose(mat(RHSv)),M=pCond,tol=p.invTol,x0=self.xo)
         (sigma,F) = gmres(INTww,transpose(mat(RHSv)),M=pCond,tol=p.invTol,x0=self.xo)
+        #(sigma,F) = bicgstab(INTww,transpose(mat(RHSv)),M=pCond,tol=p.invTol,x0=self.xo)
         sigma = list(sigma)
         if F != 0:
             merr('Iterative matrix inverse did not converge.')
