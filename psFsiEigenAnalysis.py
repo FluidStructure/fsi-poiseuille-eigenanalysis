@@ -493,14 +493,16 @@ class fmmMethod():
         sigma = self.getWallElementStrengths(RHSw)
        
         sVLW = sigma[Nx*3:Nx*4]                         # Get the strength of the vertices along the lower wall
-        PF = [0.0] + [g.dy[0]*p.dx*s for s in sVLW]
-        PF = cumsum(PF)
-        PF = [-1.0*pp for pp in PF]
+##        PF = [0.0] + [g.dy[0]*p.dx*s for s in sVLW]
+##        PF = cumsum(PF)
+##        PF = [-1.0*pp for pp in PF]
+##        Pav = sum(PF)/len(PF)
+##        PFp = [(pp-Pav) for pp in PF]
         
-        Pav = sum(PF)/len(PF)
+        PFp = [0.0] + [g.dy[0]*p.dx*(sVLW[i]+sVLW[i+1])/2.0 for i in xrange(len(sVLW)-1)] + [0.0]
         
         # Add pressures and wall density etc to the LHS
-        vdot += [v2[i]*p.rhow*p.hw + (PF[p.Nup+1+i]-Pav) for i in xrange(len(v2))]
+        vdot += [v2[i]*p.rhow*p.hw + PFp[p.Nup+1+i] for i in xrange(len(v2))]
 
         return vdot
 
