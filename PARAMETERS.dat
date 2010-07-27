@@ -1,15 +1,15 @@
 6000.0          # Reynolds number (based on displacement thickness of boundary layer) instability from Orr-Sommerfeld is at 5800 (corresponding wavenumber = 1.025)
-32              # Number of Chebyshev collocation points in the wall-normal direction
-50            	# Number of collocation points (panels) in the x-direction (for the solid wall elements) on the first (upstream) part of the lower wall
-300             # Number of collocation points (panels) in the x-direction (for the compliant wall elements)
-50            	# Number of collocation points (panels) in the x-direction (for the solid wall elements) on the second (downstream) part of the lower wall
-100.0           # Length of the channel section (m)
+16              # Number of Chebyshev collocation points in the wall-normal direction
+15            	# Number of collocation points (panels) in the x-direction (for the solid wall elements) on the first (upstream) part of the lower wall
+120             # Number of collocation points (panels) in the x-direction (for the compliant wall elements)
+15            	# Number of collocation points (panels) in the x-direction (for the solid wall elements) on the second (downstream) part of the lower wall
+30.0            # Length of the channel section (m)
 166.67          # Density of the wall material (kg/m3)
 0.01            # Thickness of the wall (m)
 0.0             # Damping coefficient of the backing-damping (Ns/m3)
 0.2e9           # Youngs modulus of the wall material (N/m2)
 0.53            # Stiffness of the backing springs (N/m3)
-True           # Calculate for the fluid only (assume rigid walls)
+False           # Calculate for the fluid only (assume rigid walls)
 False           # Allow slip at the boundary (prevent vorticity injection)
 True            # Deterministic boundary conditions
 True            # Periodic boundary conditions (left-inflow = right-outflow)
@@ -23,3 +23,4 @@ ode45           # 'eigs' or 'ode45' - which solver to use
 1e-6            # Tolerance for iterative matrix inverse (minres)
 1e-12           # Tolerance for eigenvalue solver (eigen)
 3.0             # Assume Point Length
+

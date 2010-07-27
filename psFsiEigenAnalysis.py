@@ -318,8 +318,8 @@ class fmmMethod():
         # Initialize with a sine-wave disturbance at the centreline
         NyHalf = int(round(Ny/2.0))
         for i in xrange(Nx):
-            yinit[i*Ny + NyHalf] = 1e-2*np.sin(2.0*pi*g.xc[i]/(p.LT/10.0))
-            yinit[i*Ny + NyHalf-1] = 1e-2*np.sin(2.0*pi*g.xc[i]/(p.LT/10.0))
+            yinit[i*Ny + NyHalf] = 1e-2*np.sin(2.0*pi*g.xc[i]/(p.LT/5.0))
+            yinit[i*Ny + NyHalf-1] = 1e-2*np.sin(2.0*pi*g.xc[i]/(p.LT/5.0))
         # Set the timeslots
         tslot = [0,p.Nsteps]
         # Call the ode45 solver
@@ -330,7 +330,7 @@ class fmmMethod():
         else:
             path = path + '/FSI/'
         o.outPath = path
-        o.ode45(tfun,tslot,yinit,MaxStep=p.maxStep,InitialStep=p.maxStep,AbsTol=1e-3,RelTol=1e-3)
+        o.ode45(tfun,tslot,yinit,MaxStep=p.maxStep,AbsTol=1e-3,RelTol=1e-3)
 
     def callOctave(self):
         # Save generalised matrix to A.mat
@@ -383,7 +383,7 @@ class fmmMethod():
         (Ufa,Vfa) = velocitylib.vortex_element_vel(g.XLfw,g.ycFfw*Np,vfs*Np,g.XRfw,g.ycFfw*Np,vfs*Np,(g.xcFfw+list(g.xcW)),(g.ycFfw+list(g.ycW)),threads=p.Nthreads,fmm=True,assume_point_length=p.apl,panel_tolerance=self.panTol)
         Uf = Ufa[:Nf];Ufw = Ufa[Nf:]
         Vf = Vfa[:Nf];Vfw = Vfa[Nf:]
-       
+        
         # Get the total normal flux through wall elements
         Vw = Vfw
         if p.fluidOnly == False:
@@ -391,7 +391,7 @@ class fmmMethod():
             for c in range(p.Nco):
                 i = p.Nx+p.Nup+c
                 Vw[i] -= (Vnodes[c] + Vnodes[c+1])/2.0
-
+        
         # Solve for wall source strengths and nearest-to-wall flow element strengths together
         RHSw = append(multiply(Vw,-1.0),multiply(Ufw,-1.0))
         sigma = self.getWallElementStrengths(RHSw)
@@ -605,6 +605,8 @@ class fmmMethod():
 
 class naiveMethod():
 
+    import multiprocessing
+
     def __init__(self):
         self.parameters = parameters.simulation()
         self.geometry = geometry()
@@ -636,16 +638,18 @@ class naiveMethod():
             N = Ny*Nx        
         
         def tfun(t,y):
-            self.yd = [0.0]*len(y)
+            yd = [0.0]*len(y)
+            for i in xrange(len(y)):
+                yd[i] = sum(self.RHSGeneral[i]*y)
 
-            def multSingleRow(i):
-                self.yd[i] = sum(self.RHSGeneral[i]*y)
+##            def multSingleRow(i):
+##                print('Hello!!!')
+##                #self.yd[i] = sum(self.RHSGeneral[i]*y)
+##            process_pool = multiprocessing.Pool(processes=p.Nthreads)
+##            res = process_pool.map_async(multSingleRow, range(4))
+##            res.get()
 
-            process_pool = multiprocessing.Pool(processes=p.Nthreads) # start 4 worker processes
-            res = process_pool.map_async(multSingleRow, range(len(y)))
-            res.get()
-
-            return self.yd
+            return yd
         yinit = [0.0]*N
 ##        # Initialize with a spot disturbance
 ##        nn = int(round(Nx/4.0)*Ny + round(Ny/2.0))
@@ -666,7 +670,7 @@ class naiveMethod():
         else:
             path = path + '/FSI/'
         o.outPath = path
-        o.ode45(tfun,tslot,yinit,MaxStep=p.maxStep,InitialStep=p.maxStep,AbsTol=1e-3,RelTol=1e-3)
+        o.ode45(tfun,tslot,yinit,MaxStep=p.maxStep,AbsTol=1e-3,RelTol=1e-3)
 
     def runSolver(self):
         self.generateInfluenceCoefficients()
@@ -856,7 +860,7 @@ class naiveMethod():
             PF = concatenate((zeros((1,Ntot)),PF),axis=0)
             PF = -1.0*cumsum(PF,axis=0)
             Pav = sum(PF,axis=0)/size(PF,0)                 # Get the average pressure across compliant wall
-            PF = PF[p.Nup+1:p.Nup+p.Nco] - Pav              # Subtract this from the nodal pressure values
+            PF = PF[p.Nup:p.Nup+p.Nco+1,:] - Pav            # Subtract this from the nodal pressure values
             MG = MG + PF
         else:
             PF = p.dx*cumsum(MP[p.Nx+p.Nup:p.Nx+p.Nup+p.Nco-1,:],axis=0)
