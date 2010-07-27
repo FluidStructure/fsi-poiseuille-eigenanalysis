@@ -11,6 +11,7 @@ from numpy import mat, reshape, linspace, reshape, append, random, ones, delete
 from numpy import meshgrid, bmat, array, size, zeros, transpose, cumsum, add
 import numpy as np
 import os, sys, subprocess
+import multiprocessing
 
 import pdb
 import cProfile, pstats
@@ -620,6 +621,9 @@ class naiveMethod():
         self.saveVariables()
         self.generateLHSandRHS()
         self.makeGeneralized()
+
+        p = self.parameters
+        g = self.geometry        
         
         Ny = p.chebN
         Nx = p.Nx
@@ -632,11 +636,16 @@ class naiveMethod():
             N = Ny*Nx        
         
         def tfun(t,y):
-            yd = [0.0]*len(y)
-            for i in range(len(n.RHSGeneral)):
-                r = self.RHSGeneral[i]
-                yd[i] = sum(r*y)
-            return yd
+            self.yd = [0.0]*len(y)
+
+            def multSingleRow(i):
+                self.yd[i] = sum(self.RHSGeneral[i]*y)
+
+            process_pool = multiprocessing.Pool(processes=p.Nthreads) # start 4 worker processes
+            res = process_pool.map_async(multSingleRow, range(len(y)))
+            res.get()
+
+            return self.yd
         yinit = [0.0]*N
 ##        # Initialize with a spot disturbance
 ##        nn = int(round(Nx/4.0)*Ny + round(Ny/2.0))
