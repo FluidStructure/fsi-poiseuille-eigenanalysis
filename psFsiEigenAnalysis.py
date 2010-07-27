@@ -247,7 +247,7 @@ class fmmMethod():
                 else:
                     RHSvector = self.multRHS(y)
                     LHS = LinearOperator( (N,N), matvec=self.multLHS, dtype='float64' )
-                    (yd,F) = bicgstab(LHS,transpose(mat(RHSvector)),M=pCond,tol=p.invTol,x0=RHSvector)
+                    (yd,F) = bicgstab(LHS,transpose(mat(RHSvector)),tol=p.invTol,x0=RHSvector)
                     if F != 0:
                         merr('Iterative matrix inverse did not converge.')
                     self.x0 = yd    # Update initial guess
