@@ -320,6 +320,10 @@ class fmmMethod():
         for i in xrange(Nx):
             yinit[i*Ny + NyHalf] = 1e-2*np.sin(2.0*pi*g.xc[i]/(p.LT/5.0))
             yinit[i*Ny + NyHalf-1] = 1e-2*np.sin(2.0*pi*g.xc[i]/(p.LT/5.0))
+##        # Initialise wall with a wavy disturbance
+##        for i in xrange(p.Nco-1):
+##            yinit[Ny*Nx + i] = 1e-2*np.sin(2*pi*5.0*(i+1)/(p.Nco))
+        
         # Set the timeslots
         tslot = [0,p.Nsteps]
         # Call the ode45 solver
@@ -395,6 +399,7 @@ class fmmMethod():
         # Solve for wall source strengths and nearest-to-wall flow element strengths together
         RHSw = append(multiply(Vw,-1.0),multiply(Ufw,-1.0))
         sigma = self.getWallElementStrengths(RHSw)
+        #sigma = [0.0]*len(RHSw)  # for debugging only
 
         # Get the normal velocity at fluid elements due to wall source and near-wall vortex elements and
         # Add to normal velocity at fluid elements due to themselves (already calculated)
@@ -453,9 +458,10 @@ class fmmMethod():
             d4dx = f.d4dx([0.0]+v1+[0.0],1,p.dx)
             d4dx = d4dx[1:len(d4dx)-1]
             for i in xrange(Nn):
-                vdotWall[i+Nn] += -1.0*(p.B*d4dx[i] + p.K)*v1[i] - p.d*v2[i]
+                vdotWall[i+Nn] += -1.0*p.B*d4dx[i] - (p.K)*v1[i] - p.d*v2[i]
             # Append this onto the output vector
             vdot += vdotWall
+            #pdb.set_trace()
         
         return vdot
         
@@ -499,6 +505,7 @@ class fmmMethod():
         # Solve for wall source strengths and nearest-to-wall flow element strengths together
         RHSw = append(multiply(Vw,-1.0),multiply(Ufw,-1.0))
         sigma = self.getWallElementStrengths(RHSw)
+        #sigma = [0.0]*len(RHSw)  # for debugging only
         
         sVLW = sigma[Nx*3:Nx*4]                         # Get the strength of the vertices along the lower wall
         sVLWcorr = sVLW - (sum(sVLW)/len(sVLW))
@@ -511,6 +518,7 @@ class fmmMethod():
 ##        PFp = [0.0] + [-1.0*g.dy[0]*p.dx*(sVLW[i]+sVLW[i+1])/2.0 for i in xrange(len(sVLW)-1)] + [0.0]
         
         # Add pressures and wall density etc to the LHS
+        # v2LHS = [v2[i]*p.rhow*p.hw for i in xrange(len(v2))]    # For debugging only (no pressure on wall)
         v2LHS = [v2[i]*p.rhow*p.hw + PFp[p.Nup+1+i] for i in xrange(len(v2))]
         vdot += v2LHS
 
