@@ -1124,10 +1124,10 @@ class ppOde45(postProc):
                 inDict = loadmat(fpath,struct_as_record=True)
                 v = inDict['y']
                 tt = inDict['t']
-                
-                t.append(tt[0][0])
+
+                t.append(tt)
                 for i in xrange(n):
-                    Z[i].append(v[eleList[k][i]][0])
+                    Z[i].append(v[eleList[k][i]])
                 
             M[k] = Z
             for i in xrange(n):
