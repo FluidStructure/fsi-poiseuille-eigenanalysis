@@ -1141,7 +1141,7 @@ class ppOde45(postProc):
             plt.axis(ax)
         if leg != []:
             plt.legend(leg,loc=legLoc)
-        fig1.savefig('plotMonitors.eps')
+        fig1.savefig('plotMonitors.png')
 
         if saveMats == True:
             print 'Saving matrix to file monitors.mat'
