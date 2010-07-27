@@ -509,7 +509,7 @@ class fmmMethod():
         
         sVLW = sigma[Nx*3:Nx*4]                         # Get the strength of the vertices along the lower wall
         sVLWcorr = sVLW - (sum(sVLW)/len(sVLW))
-        PF = [0.0] + [g.dy[0]*p.dx*s for s in sVLWcorr]
+        PF = [0.0] + [0.5*g.dy[0]*p.dx*s for s in sVLWcorr]
         PF = cumsum(PF)
         PF = [-1.0*pp for pp in PF]
         Pav = sum(PF)/len(PF)
