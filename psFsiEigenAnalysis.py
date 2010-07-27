@@ -334,7 +334,7 @@ class fmmMethod():
         else:
             path = path + '/FSI/'
         o.outPath = path
-        o.ode45(tfun,tslot,yinit,MaxStep=p.maxStep,AbsTol=1e-3,RelTol=1e-3)
+        o.ode45(tfun,tslot,yinit,MaxStep=p.maxStep,AbsTol=1e-6,RelTol=1e-6)
 
     def callOctave(self):
         # Save generalised matrix to A.mat
@@ -678,7 +678,7 @@ class naiveMethod():
         else:
             path = path + '/FSI/'
         o.outPath = path
-        o.ode45(tfun,tslot,yinit,MaxStep=p.maxStep,AbsTol=1e-3,RelTol=1e-3)
+        o.ode45(tfun,tslot,yinit,MaxStep=p.maxStep,AbsTol=1e-6,RelTol=1e-6)
 
     def runSolver(self):
         self.generateInfluenceCoefficients()
