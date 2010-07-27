@@ -668,7 +668,10 @@ class naiveMethod():
 
     def makeGeneralized(self):
         print 'Making LHS and RHS Matrices into single generalised matrix: A'
-        self.RHSGeneral = linalg.solve(self.LHS,self.RHS)
+        if p.fluidOnly == False:
+            self.RHSGeneral = linalg.solve(self.LHS,self.RHS)
+        else:
+            self.RHSGeneral = self.RHS
         print 'Done'
 
     def callOctave(self):
@@ -840,11 +843,11 @@ class naiveMethod():
         # Add the pressure forcing terms to LHS of wall equation
         Ntot = p.Nf + Nn*2
         if p.deterministicBCs == True:
-            PF = g.dy[0]*p.dx*MAf[p.Nx+p.Nup:p.Nx+p.Nup+p.Nco,:]
+            PF = g.dy[0]*p.dx*MAf[p.Nx:2*p.Nx,:]
             PF = concatenate((zeros((1,Ntot)),PF),axis=0)
             PF = -1.0*cumsum(PF,axis=0)
             Pav = sum(PF,axis=0)/size(PF,0)                 # Get the average pressure across compliant wall
-            PF = PF - Pav                                   # Subtract this from the nodal pressure values
+            PF = PF[p.Nup+1:p.Nup+p.Nco] - Pav              # Subtract this from the nodal pressure values
             MG = MG + PF
         else:
             PF = p.dx*cumsum(MP[p.Nx+p.Nup:p.Nx+p.Nup+p.Nco-1,:],axis=0)
