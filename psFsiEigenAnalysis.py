@@ -1273,7 +1273,10 @@ class ppEigs(postProc):
             vm = vm[0:Nw/2]
             vm = concatenate(([0.0],vm,[0.0]))
 
-        T = abs(2*pi/imag(e))
+        if e == 0.0:
+            T = 1
+        else:
+            T = abs(2*pi/imag(e))
         tRange = linspace(0,T*P,Np*P,endpoint=pm.includeEndTime)
         Mv = [[] for i in xrange(len(tRange))]
         f = 0
