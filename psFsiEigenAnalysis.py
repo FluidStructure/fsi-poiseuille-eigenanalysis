@@ -4,6 +4,7 @@ from scipy.io import savemat, loadmat
 from scipy.sparse.linalg import gmres, minres, bicgstab, LinearOperator
 from scipy.sparse.linalg.eigen.arpack.speigs import ARPACK_eigs
 from scipy.sparse.linalg.eigen.arpack import eigen
+from scipy.linalg import eig
 import matplotlib.pyplot as plt
 from matplotlib.image import NonUniformImage
 from matplotlib.pyplot import imshow, axis, contour, contourf
@@ -621,10 +622,26 @@ class naiveMethod():
         # Adjust panel tolerance on FMM call (and warn if necessary)
         g = self.geometry
         p = self.parameters
+        self.eCount = 0
+        self.eVec = []
+        # FMM method tolerances
         self.panTol = 0.001
         if ((1.0-g.yc[0])/p.dx) < 0.001:
             self.panTol = ((1.0-g.yc[0])/p.dx)/2.0
             print('ADJUSTING PANEL TOLERANCE FOR FMM TO ' + str(self.panTol))
+
+    def makeEigFilename(self):
+        p = self.parameters
+        g = self.geometry
+        fname = 'eigs_'
+        if p.fluidOnly == True:
+            fname += 'FLO_'
+        else:
+            fname += 'FSI_'
+        fname = fname + str(p.chebN) + 'x' + str(p.Nx)
+        fname = fname + '_R' + str(int(p.R))
+        fname = fname + '.mat'
+        return fname
 
     def runOdeSolver(self):
         self.generateInfluenceCoefficients()
@@ -659,15 +676,15 @@ class naiveMethod():
 
             return yd
         yinit = [0.0]*N
-##        # Initialize with a spot disturbance
-##        nn = int(round(Nx/4.0)*Ny + round(Ny/2.0))
-##        yinit[nn] = 1e-2;yinit[nn+Ny*20] = -1e-2
-##        yinit[nn-1] = 1e-2;yinit[nn-1+Ny*20] = -1e-2
+        # Initialize with a spot disturbance
+        nn = int(round(Nx/4.0)*Ny + round(Ny/2.0))
+        yinit[nn] = 1e-2;yinit[nn+Ny*5] = -1e-2
+        yinit[nn-1] = 1e-2;yinit[nn-1+Ny*5] = -1e-2
         # Initialize with a sine-wave disturbance at the centreline
-        NyHalf = int(round(Ny/2.0))
-        for i in xrange(Nx):
-            yinit[i*Ny + NyHalf] = 1e-2*np.sin(pi*g.xc[i])
-            yinit[i*Ny + NyHalf-1] = 1e-2*np.sin(pi*g.xc[i])
+##        NyHalf = int(round(Ny/2.0))
+##        for i in xrange(Nx):
+##            yinit[i*Ny + NyHalf] = 1e-2*np.sin(2.0*pi*g.xc[i]/(p.LT/5.0))
+##            yinit[i*Ny + NyHalf-1] = 1e-2*np.sin(2.0*pi*g.xc[i]/(p.LT/5.0))
         # Set the timeslots
         tslot = [0,p.Nsteps]
         # Call the ode45 solver
@@ -680,14 +697,117 @@ class naiveMethod():
         o.outPath = path
         o.ode45(tfun,tslot,yinit,MaxStep=p.maxStep,AbsTol=1e-6,RelTol=1e-6)
 
-    def runSolver(self):
+    def mapLargestRealEigenvalues(self):
+        Rrange = [5000 + i*500 for i in xrange(2)]
+        Krange = [0.6 + float(i)*0.05 for i in xrange(2)]
+        
+        self.parameters = parameters.simulation()
+        self.geometry = geometry()
+        
+        eMat = [[]]
+        eoMat = [[]]
+        for i in xrange(len(Krange)):
+            k = Krange[i]
+            
+            self.parameters.LT = 2*pi/k
+            print('Wavenumber k = ' + str(k))
+            print('Making domain length: ' + str(self.parameters.LT))
+            self.geometry.makeGeometry(self.parameters)
+            self.generateInfluenceCoefficients()
+            
+            for j in xrange(len(Rrange)):
+                imstat = 0
+                R = Rrange[j]
+                print('Solving for Reynolds Number, R = ' + str(R) + ' (k = ' + str(k) + ')')
+                
+                self.generateLHSandRHS()
+                self.makeGeneralized()
+                
+                (w,v) = eig(self.RHSGeneral)
+                wr = real(w)
+                wR = max(wr)
+                print('Largest real part of eigenvalue (wR) = ' + str(wR))
+                
+                wro = []
+                for e in w:
+                    if imag(e) != 0.0:
+                        wro.append(e)
+                wRo = max(real(wro))
+                print('Largest oscillatory part of eigenvalue (wRo) = ' + str(wRo))
+                
+                if imag(w[wr.argmax()]) == 0.0:
+                    print('--NOTE: Result is non-oscillatory (imaginary part = 0.0)')
+                    imstat = 1
+                
+                eMat[i].append(wR)
+                eoMat[i].append(wRo)
+            eMat.append([])
+            eoMat.append([])
+        # Save the result
+        eMat.pop()
+        eoMat.pop()
+        outDict = {}
+        outDict['wR'] = array(eMat)
+        outDict['wRo'] = array(eoMat)
+        outDict['k'] = array(Krange)
+        outDict['R'] = array(Rrange)
+        savemat('results/eMap.mat',outDict)
+
+    def runEigSolver(self):
         self.generateInfluenceCoefficients()
         self.saveVariables()
         self.generateLHSandRHS()
         self.makeGeneralized()
-        self.callOctave()
+        #self.callOctave()
+        
+        Ny = p.chebN
+        Nx = p.Nx
+        if p.deterministicBCs == True:
+            Ny = Ny - 2
+
+        if p.fluidOnly == False:
+            N = Ny*Nx + (p.Nco-1)*2
+        else:
+            N = Ny*Nx
+        
+        def tfun(y):
+            self.eCount += 1    # Update the iteration counter
+            self.eVec = y       # Update the initial guess for the future
+            print('Calling EIGEN tfun.  Iteration = ' + str(self.eCount))
+            if iscomplexobj(y):
+                print("---WARNING!  Input vector is complex!")
+                merr('Input vector is complex!!')
+                #yd_r = self.multRHS(real(y))
+                #yd_i = self.multRHS(imag(y))
+                #yd = [complex(yd_r[i],yd_i[i]) for i in xrange(len(y))]
+            else:
+                yd = [0.0]*len(y)
+                for i in xrange(len(y)):
+                    yd[i] = sum(self.RHSGeneral[i]*y)
+            return yd
+
+        ## Using the eigen call
+        RHS = LinearOperator( (N,N), matvec=tfun, dtype='float64' )
+        #print(int(p.Nsteps))
+        #(e,v) = eigen(RHS, k=6, M=None, sigma=None, which='LR', v0=None, ncv=None, maxiter=int(p.Nsteps), tol=p.eigTol, return_eigenvectors=True)
+        (e,v) = eigen(RHS, k=6, M=None, sigma=None, which='LR', v0=None, ncv=None, maxiter=None, tol=p.eigTol, return_eigenvectors=True)
+        ## Using ARPACK_eigs
+        #(e,v) = ARPACK_eigs(tfun, N, 6, which='LR', ncv=None, tol=p.eigTol)
+        print(e)
+        
+        # Make the output filename
+        fname = self.makeEigFilename()
+        fname = 'results/' + fname
+        
+        # Save the result
+        outDict = {}
+        outDict['evals'] = e
+        outDict['Veigs'] = v
+        outDict['y0'] = self.eVec
+        savemat(fname,outDict)
 
     def makeGeneralized(self):
+        p = self.parameters
         print 'Making LHS and RHS Matrices into single generalised matrix: A'
         if p.fluidOnly == False:
             self.RHSGeneral = linalg.solve(self.LHS,self.RHS)
@@ -937,7 +1057,7 @@ class naiveMethod():
         if forceMake == False:
             if os.path.exists('ICs.mat') or os.path.exists('VARS.mat'):
                 invec = loadmat('VARS.mat',struct_as_record=True)
-                if (int(invec['Nx'])==p.Nx) and (int(invec['Ndomains'])==p.Ndomains) and (int(invec['chebN'])==p.chebN) and (int(invec['LT'])==int(p.LT)) and (str(p.periodicBCs) in invec['periodicBCs']):
+                if (int(invec['Nx'])==p.Nx) and (int(invec['Ndomains'])==p.Ndomains) and (int(invec['chebN'])==p.chebN) and (float(invec['LT'])==float(p.LT)) and (str(p.periodicBCs) in invec['periodicBCs']):
                     print 'Geometry seems to be the same as that already saved...'
                     print 'Loading existing Influence Coefficient matrices...'
                     self.ICs = loadmat('ICs.mat',struct_as_record=True)
@@ -1149,7 +1269,7 @@ class ppOde45(postProc):
             o['M'] = M
             savemat('monitors.mat',o)
     
-    def makeMovie(self,prt='Fluid',R=[],fillConts=False,Nlevels=20,dumpFigs=True,keepFigs=False):
+    def makeMovie(self,prt='Fluid',R=[],fillConts=False,Nlevels=20,dumpFigs=True,keepFigs=False,figWidth=16,figHeight=4):
         '''
         prt = 'Fluid' or 'Wall' to plot wall or fluid displacements
         fillConts - plot with contourf or contour
@@ -1162,7 +1282,7 @@ class ppOde45(postProc):
         g = self.g
         pg = self.p.general()
         fig1 = plt.figure()
-        fig1.set_figwidth(16);fig1.set_figheight(4)
+        fig1.set_figwidth(figWidth);fig1.set_figheight(figHeight)
 
         Ny = self.ps.chebN
         yc = g.yc
@@ -1231,7 +1351,7 @@ class ppOde45(postProc):
 
 class ppEigs(postProc):
 
-    def makeMovie(self,fname,prt='Fluid',modeNum=0,fillConts=False,Nlevels=20,dumpFigs=True,keepFigs=False):
+    def makeMovie(self,fname,prt='Fluid',modeNum=0,fillConts=False,Nlevels=20,dumpFigs=True,keepFigs=False,figWidth=16,figHeight=4):
         
         pg = self.p.general()
         pm = self.p.movie()
@@ -1252,7 +1372,7 @@ class ppEigs(postProc):
         Nw = (ps.Nco-1)*2
 
         # NOTE: figsize gives the figure size in inches @ 100dpi => 16=1200pixels
-        fig1 = plt.figure(figsize=(16,4))
+        fig1 = plt.figure(figsize=(figWidth,figHeight))
         #ax = fig1.add_subplot(111)
 
         print fname
