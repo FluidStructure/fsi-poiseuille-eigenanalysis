@@ -59,6 +59,7 @@ class parameters():
             self.parseBoolString = c.parseBoolString
             p = c.parseParameterFile(FILE='PARAMETERS.dat')
             self.setParameters(p)
+            self.calcParameters()
 
         def setParameters(self,p):
 
@@ -87,7 +88,8 @@ class parameters():
             self.invTol = float(p[22])
             self.eigTol = float(p[23])
             self.apl = float(p[24])
-            
+
+        def calcParameters(self):
             # Some calculated fixed variables for the simulation
             self.Nx = self.Nup+self.Nco+self.Ndn                # Total number of panels along the length of the domain
             self.Nf = self.chebN*self.Nx                        # Total number of fluid elements
@@ -698,8 +700,8 @@ class naiveMethod():
         o.ode45(tfun,tslot,yinit,MaxStep=p.maxStep,AbsTol=1e-6,RelTol=1e-6)
 
     def mapLargestRealEigenvalues(self):
-        Rrange = [5000 + i*500 for i in xrange(2)]
-        Krange = [0.6 + float(i)*0.05 for i in xrange(2)]
+        Rrange = [5000 + i*100 for i in xrange(31)]
+        Krange = [0.6 + float(i)*0.02 for i in xrange(31)]
         
         self.parameters = parameters.simulation()
         self.geometry = geometry()
@@ -712,6 +714,7 @@ class naiveMethod():
             self.parameters.LT = 2*pi/k
             print('Wavenumber k = ' + str(k))
             print('Making domain length: ' + str(self.parameters.LT))
+            self.parameters.calcParameters()    # Update calculated parameters
             self.geometry.makeGeometry(self.parameters)
             self.generateInfluenceCoefficients()
             
@@ -720,6 +723,8 @@ class naiveMethod():
                 R = Rrange[j]
                 print('Solving for Reynolds Number, R = ' + str(R) + ' (k = ' + str(k) + ')')
                 
+                self.parameters.R = R
+                self.parameters.calcParameters()    # Update calculated parameters
                 self.generateLHSandRHS()
                 self.makeGeneralized()
                 
