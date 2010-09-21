@@ -323,9 +323,9 @@ class fmmMethod():
         for i in xrange(Nx):
             yinit[i*Ny + NyHalf] = 1e-2*np.sin(2.0*pi*g.xc[i]/(p.LT/5.0))
             yinit[i*Ny + NyHalf-1] = 1e-2*np.sin(2.0*pi*g.xc[i]/(p.LT/5.0))
-##        # Initialise wall with a wavy disturbance
+##        # Initialise wall with a wavy wall disturbance
 ##        for i in xrange(p.Nco-1):
-##            yinit[Ny*Nx + i] = 1e-2*np.sin(2*pi*5.0*(i+1)/(p.Nco))
+##            yinit[Nx*Ny + i] = 1e-2*np.sin(2*pi*5.0*(i+1)/(p.Nco))
         
         # Set the timeslots
         tslot = [0,p.Nsteps]
@@ -700,8 +700,10 @@ class naiveMethod():
         o.ode45(tfun,tslot,yinit,MaxStep=p.maxStep,AbsTol=1e-6,RelTol=1e-6)
 
     def mapLargestRealEigenvalues(self):
-        Rrange = [5000 + i*100 for i in xrange(31)]
-        Krange = [0.6 + float(i)*0.02 for i in xrange(31)]
+        #Rrange = [8000 + i*100 for i in xrange(1)]
+        #Krange = [0.6 + float(i)*0.02 for i in xrange(1)]
+        Rrange = [5000.0,8000.0]
+        Krange = [0.6,0.9666]
         
         self.parameters = parameters.simulation()
         self.geometry = geometry()
@@ -711,7 +713,7 @@ class naiveMethod():
         for i in xrange(len(Krange)):
             k = Krange[i]
             
-            self.parameters.LT = 2*pi/k
+            self.parameters.LT = 2.0*pi/k
             print('Wavenumber k = ' + str(k))
             print('Making domain length: ' + str(self.parameters.LT))
             self.parameters.calcParameters()    # Update calculated parameters
